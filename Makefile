@@ -5,7 +5,7 @@ VIVADO ?= vivado
 VITIS ?= vitis
 POWERSHELL ?= powershell
 
-.PHONY: help all memmap hw ps run sim sim-pl-top sim-controller-core clean clean-generated clean-logs
+.PHONY: help all memmap hw ps run pin-test sim sim-pl-top sim-controller-core clean clean-generated clean-logs
 
 help:
 	@echo Common targets:
@@ -13,6 +13,7 @@ help:
 	@echo   make hw          Build/export Vivado hardware without root logs or journals
 	@echo   make ps          Build the Vitis bare-metal PS app
 	@echo   make run         Program FPGA, run the bare-metal app, and read PL registers
+	@echo   make pin-test    Program FPGA and drive slow PMOD test waves
 	@echo   make sim         Run RTL testbenches without root log clutter
 	@echo   make all         Run memmap, hw, and ps
 	@echo   make clean       Remove generated Xilinx output and root log clutter
@@ -30,6 +31,9 @@ ps:
 
 run:
 	$(VITIS) -s ps/scripts/run_controller.py
+
+pin-test:
+	$(VITIS) -s ps/scripts/run_controller.py --pin-test
 
 sim: sim-pl-top sim-controller-core
 

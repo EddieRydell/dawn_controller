@@ -39,7 +39,10 @@ module frame_reader #(
 
     output logic                         busy,
     output logic                         done_pulse,
-    output logic                         config_error
+    output logic                         config_error,
+    output logic [2:0]                   debug_state,
+    output logic [31:0]                  debug_output_index,
+    output logic [31:0]                  debug_pixel_index
 );
 
     localparam int unsigned PIXEL_BYTES = 4;
@@ -102,6 +105,10 @@ module frame_reader #(
             pixel_read_upper_word = (pixel_read_addr(index) & 32'd4) != 32'd0;
         end
     endfunction
+
+    assign debug_state = state;
+    assign debug_output_index = output_index;
+    assign debug_pixel_index = pixel_index;
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin

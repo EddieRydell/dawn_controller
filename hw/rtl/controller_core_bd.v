@@ -119,8 +119,22 @@ module controller_core_bd #(
     wire config_error;
     wire frame_done_pulse;
     wire [31:0] status;
+    wire [MAX_OUTPUTS-1:0] pl_ws2811_data;
+    wire [31:0] debug_reader_state;
+    wire [31:0] debug_reader_output_index;
+    wire [31:0] debug_reader_pixel_index;
+    wire [31:0] debug_pixel_accept_count;
+    wire [31:0] debug_ws_high_count;
+    reg [31:0] debug_axi_arvalid_cycles;
+    reg [31:0] debug_axi_ar_handshakes;
+    reg [31:0] debug_axi_r_handshakes;
+    reg [31:0] debug_axi_last_araddr;
+    reg [31:0] debug_axi_last_rresp;
+    reg [31:0] debug_pin_counter;
+    wire [MAX_OUTPUTS-1:0] debug_pin_data;
 
     localparam [31:0] PL_ENABLE = 32'h00000001;
+    localparam [31:0] PL_PIN_TEST = 32'h00000100;
     localparam [31:0] PL_BUSY = 32'h00000001;
     localparam [31:0] PL_FRAME_PENDING = 32'h00000002;
     localparam [31:0] PL_UNDERRUN = 32'h00000004;
@@ -130,6 +144,10 @@ module controller_core_bd #(
         | (frame_pending ? PL_FRAME_PENDING : 32'h00000000)
         | (underrun ? PL_UNDERRUN : 32'h00000000)
         | (config_error ? PL_CONFIG_ERROR : 32'h00000000);
+
+    assign ws2811_data = ((control & PL_PIN_TEST) != 32'h0)
+        ? debug_pin_data
+        : pl_ws2811_data;
 
     assign m_axi_awaddr = {AXI_ADDR_WIDTH{1'b0}};
     assign m_axi_awlen = 8'h00;
@@ -177,7 +195,17 @@ module controller_core_bd #(
         .output_count_o(output_count),
         .output_pixel_count_o(output_pixel_count_flat),
         .output_buffer_offset_o(output_buffer_offset_flat),
-        .output_flags_o(output_flags_flat)
+        .output_flags_o(output_flags_flat),
+        .debug_reader_state_i(debug_reader_state),
+        .debug_reader_output_index_i(debug_reader_output_index),
+        .debug_reader_pixel_index_i(debug_reader_pixel_index),
+        .debug_axi_arvalid_cycles_i(debug_axi_arvalid_cycles),
+        .debug_axi_ar_handshakes_i(debug_axi_ar_handshakes),
+        .debug_axi_r_handshakes_i(debug_axi_r_handshakes),
+        .debug_axi_last_araddr_i(debug_axi_last_araddr),
+        .debug_axi_last_rresp_i(debug_axi_last_rresp),
+        .debug_pixel_accept_count_i(debug_pixel_accept_count),
+        .debug_ws_high_count_i(debug_ws_high_count)
     );
 
     pl_top #(
@@ -208,12 +236,51 @@ module controller_core_bd #(
         .m_axi_rlast(m_axi_rlast),
         .m_axi_rvalid(m_axi_rvalid),
         .m_axi_rready(m_axi_rready),
-        .ws2811_out(ws2811_data),
+        .ws2811_out(pl_ws2811_data),
         .busy(busy),
         .frame_pending(frame_pending),
         .underrun(underrun),
         .config_error(config_error),
-        .frame_done_pulse(frame_done_pulse)
+        .frame_done_pulse(frame_done_pulse),
+        .debug_reader_state(debug_reader_state),
+        .debug_reader_output_index(debug_reader_output_index),
+        .debug_reader_pixel_index(debug_reader_pixel_index),
+        .debug_pixel_accept_count(debug_pixel_accept_count),
+        .debug_ws_high_count(debug_ws_high_count)
     );
+
+    always @(posedge aclk) begin
+        if (!aresetn) begin
+            debug_axi_arvalid_cycles <= 32'h00000000;
+            debug_axi_ar_handshakes <= 32'h00000000;
+            debug_axi_r_handshakes <= 32'h00000000;
+            debug_axi_last_araddr <= 32'h00000000;
+            debug_axi_last_rresp <= 32'h00000000;
+        end else begin
+            if (m_axi_arvalid) begin
+                debug_axi_arvalid_cycles <= debug_axi_arvalid_cycles + 32'd1;
+            end
+            if (m_axi_arvalid && m_axi_arready) begin
+                debug_axi_ar_handshakes <= debug_axi_ar_handshakes + 32'd1;
+                debug_axi_last_araddr <= m_axi_araddr;
+            end
+            if (m_axi_rvalid && m_axi_rready) begin
+                debug_axi_r_handshakes <= debug_axi_r_handshakes + 32'd1;
+                debug_axi_last_rresp <= {30'd0, m_axi_rresp};
+            end
+        end
+    end
+
+    for (genvar debug_pin_index = 0; debug_pin_index < MAX_OUTPUTS; debug_pin_index = debug_pin_index + 1) begin : gen_debug_pin_data
+        assign debug_pin_data[debug_pin_index] = debug_pin_counter[26 - (debug_pin_index % 4)];
+    end
+
+    always @(posedge aclk) begin
+        if (!aresetn) begin
+            debug_pin_counter <= 32'h00000000;
+        end else begin
+            debug_pin_counter <= debug_pin_counter + 32'd1;
+        end
+    end
 
 endmodule

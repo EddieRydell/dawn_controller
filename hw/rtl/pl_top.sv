@@ -44,7 +44,12 @@ module pl_top #(
     output logic                         frame_pending,
     output logic                         underrun,
     output logic                         config_error,
-    output logic                         frame_done_pulse
+    output logic                         frame_done_pulse,
+    output logic [31:0]                  debug_reader_state,
+    output logic [31:0]                  debug_reader_output_index,
+    output logic [31:0]                  debug_reader_pixel_index,
+    output logic [31:0]                  debug_pixel_accept_count,
+    output logic [31:0]                  debug_ws_high_count
 );
 
     logic [MAX_OUTPUTS*24-1:0] pixel_rgb_flat;
@@ -58,6 +63,11 @@ module pl_top #(
     logic reader_busy;
     logic reader_done_pulse;
     logic reader_config_error;
+    logic [2:0] reader_state;
+    logic [31:0] reader_output_index;
+    logic [31:0] reader_pixel_index;
+    logic [31:0] pixel_accept_count;
+    logic [31:0] ws_high_count;
 
     for (genvar i = 0; i < MAX_OUTPUTS; i++) begin : gen_output_enable
         assign output_enable[i] = output_flags_flat[i*32];
@@ -96,7 +106,10 @@ module pl_top #(
         .output_end_frame(output_end_frame),
         .busy(reader_busy),
         .done_pulse(reader_done_pulse),
-        .config_error(reader_config_error)
+        .config_error(reader_config_error),
+        .debug_state(reader_state),
+        .debug_output_index(reader_output_index),
+        .debug_pixel_index(reader_pixel_index)
     );
 
     output_bank #(
@@ -110,7 +123,7 @@ module pl_top #(
     ) output_bank (
         .clk(clk),
         .rst_n(rst_n),
-        .global_enable(enable),
+        .global_enable(enable && !reader_config_error),
         .start_frame(commit_frame),
         .output_enable(output_enable),
         .pixel_rgb_flat(pixel_rgb_flat),
@@ -128,5 +141,24 @@ module pl_top #(
     assign underrun = |output_underrun_pulse;
     assign config_error = reader_config_error;
     assign frame_done_pulse = reader_done_pulse || (|output_done_pulse);
+    assign debug_reader_state = {29'd0, reader_state};
+    assign debug_reader_output_index = reader_output_index;
+    assign debug_reader_pixel_index = reader_pixel_index;
+    assign debug_pixel_accept_count = pixel_accept_count;
+    assign debug_ws_high_count = ws_high_count;
+
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            pixel_accept_count <= 32'd0;
+            ws_high_count <= 32'd0;
+        end else begin
+            if (|(pixel_valid & pixel_ready)) begin
+                pixel_accept_count <= pixel_accept_count + 32'd1;
+            end
+            if (|ws2811_out) begin
+                ws_high_count <= ws_high_count + 32'd1;
+            end
+        end
+    end
 
 endmodule

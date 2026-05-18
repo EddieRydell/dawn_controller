@@ -26,7 +26,18 @@ module controller_regs #(
     output logic [31:0]            output_count_o,
     output logic [MAX_OUTPUTS*32-1:0] output_pixel_count_o,
     output logic [MAX_OUTPUTS*32-1:0] output_buffer_offset_o,
-    output logic [MAX_OUTPUTS*32-1:0] output_flags_o
+    output logic [MAX_OUTPUTS*32-1:0] output_flags_o,
+
+    input  logic [31:0]            debug_reader_state_i,
+    input  logic [31:0]            debug_reader_output_index_i,
+    input  logic [31:0]            debug_reader_pixel_index_i,
+    input  logic [31:0]            debug_axi_arvalid_cycles_i,
+    input  logic [31:0]            debug_axi_ar_handshakes_i,
+    input  logic [31:0]            debug_axi_r_handshakes_i,
+    input  logic [31:0]            debug_axi_last_araddr_i,
+    input  logic [31:0]            debug_axi_last_rresp_i,
+    input  logic [31:0]            debug_pixel_accept_count_i,
+    input  logic [31:0]            debug_ws_high_count_i
 );
 
     import regs_pkg::*;
@@ -81,6 +92,16 @@ module controller_regs #(
             PL_REG_OUTPUT_COUNT: value = output_count_reg;
             PL_REG_MAX_PIXELS_PER_OUTPUT: value = MAX_PIXELS_PER_OUTPUT;
             PL_REG_FRAME_BASE_ADDR: value = frame_base_addr_reg;
+            12'h300: value = debug_reader_state_i;
+            12'h304: value = debug_reader_output_index_i;
+            12'h308: value = debug_reader_pixel_index_i;
+            12'h30c: value = debug_axi_arvalid_cycles_i;
+            12'h310: value = debug_axi_ar_handshakes_i;
+            12'h314: value = debug_axi_r_handshakes_i;
+            12'h318: value = debug_axi_last_araddr_i;
+            12'h31c: value = debug_axi_last_rresp_i;
+            12'h320: value = debug_pixel_accept_count_i;
+            12'h324: value = debug_ws_high_count_i;
             default: begin
                 if (addr >= PL_REG_OUTPUT_BASE) begin
                     output_index = (addr - PL_REG_OUTPUT_BASE) / PL_REG_OUTPUT_STRIDE;
@@ -124,13 +145,17 @@ module controller_regs #(
                 output_flags[i] <= 32'h0000_0000;
             end
         end else begin
-            status_reg <= status_i;
+            status_reg <= (status_i & (PL_BUSY | PL_FRAME_PENDING))
+                | ((status_reg | status_i) & (PL_UNDERRUN | PL_CONFIG_ERROR));
             commit_frame_pulse <= 1'b0;
 
             if (reg_wr_en) begin
                 unique case (reg_wr_addr)
                 PL_REG_CONTROL: begin
                     control_reg <= apply_wstrb(control_reg, reg_wr_data, reg_wr_strb) & ~PL_COMMIT_FRAME;
+                    if ((apply_wstrb(control_reg, reg_wr_data, reg_wr_strb) & PL_ENABLE) == 32'h0) begin
+                        status_reg <= status_i & (PL_BUSY | PL_FRAME_PENDING);
+                    end
                     if (apply_wstrb(control_reg, reg_wr_data, reg_wr_strb) & PL_COMMIT_FRAME) begin
                         active_bank_reg <= write_bank_reg;
                         frame_counter_reg <= frame_counter_reg + 32'd1;

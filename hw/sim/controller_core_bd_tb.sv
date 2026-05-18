@@ -8,9 +8,12 @@ module controller_core_bd_tb;
     localparam int unsigned AXI_ADDR_WIDTH = 32;
     localparam int unsigned AXI_DATA_WIDTH = 64;
     localparam int unsigned CLK_PERIOD_NS = 10;
+    localparam int unsigned FRAME_WAIT_CYCLES = 22000;
 
     localparam logic [31:0] PL_ENABLE = 32'h0000_0001;
     localparam logic [31:0] PL_COMMIT_FRAME = 32'h0000_0002;
+    localparam logic [31:0] PL_BUSY = 32'h0000_0001;
+    localparam logic [31:0] PL_CONFIG_ERROR = 32'h0000_0008;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_CONTROL = 12'h000;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_STATUS = 12'h004;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_ACTIVE_BANK = 12'h008;
@@ -22,6 +25,14 @@ module controller_core_bd_tb;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_OUTPUT0_PIXEL_COUNT = 12'h100;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_OUTPUT0_BUFFER_OFFSET = 12'h104;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_OUTPUT0_FLAGS = 12'h108;
+
+    typedef enum int unsigned {
+        AXI_MODE_NORMAL,
+        AXI_MODE_NO_ARREADY,
+        AXI_MODE_NO_RVALID,
+        AXI_MODE_BAD_RRESP,
+        AXI_MODE_MISSING_RLAST
+    } axi_mode_t;
 
     logic aclk = 1'b0;
     logic aresetn = 1'b0;
@@ -74,13 +85,17 @@ module controller_core_bd_tb;
 
     logic [MAX_OUTPUTS-1:0] ws2811_data;
 
-    logic [31:0] pixel_mem [0:31];
-    logic [31:0] pending_addr;
-    int pending_latency = -1;
+    axi_mode_t axi_mode = AXI_MODE_NORMAL;
+    int unsigned ar_ready_delay = 0;
+    int unsigned read_latency = 2;
     int unsigned ar_count = 0;
     int unsigned r_count = 0;
     int unsigned ws_high_count = 0;
     int unsigned ws_rise_count = 0;
+    int unsigned missing_arready_cycles = 0;
+    int pending_latency = -1;
+    logic [31:0] pixel_mem [0:31];
+    logic [31:0] pending_addr;
     logic last_ws = 1'b0;
 
     always #(CLK_PERIOD_NS / 2) aclk = ~aclk;
@@ -142,6 +157,40 @@ module controller_core_bd_tb;
         .ws2811_data(ws2811_data)
     );
 
+    task automatic init_pixels;
+        begin
+            for (int unsigned i = 0; i < 32; i++) begin
+                pixel_mem[i] = 32'h0000_0000;
+            end
+
+            pixel_mem[0] = 32'h00ff_0000;
+            pixel_mem[1] = 32'h0000_ff00;
+            pixel_mem[2] = 32'h0000_00ff;
+            pixel_mem[3] = 32'h00ff_ffff;
+        end
+    endtask
+
+    task automatic reset_dut;
+        begin
+            aresetn <= 1'b0;
+            s_axi_awaddr <= '0;
+            s_axi_awvalid <= 1'b0;
+            s_axi_wdata <= '0;
+            s_axi_wstrb <= 4'hf;
+            s_axi_wvalid <= 1'b0;
+            s_axi_bready <= 1'b0;
+            s_axi_araddr <= '0;
+            s_axi_arvalid <= 1'b0;
+            s_axi_rready <= 1'b0;
+            axi_mode <= AXI_MODE_NORMAL;
+            ar_ready_delay <= 0;
+            read_latency <= 2;
+            repeat (8) @(posedge aclk);
+            aresetn <= 1'b1;
+            repeat (4) @(posedge aclk);
+        end
+    endtask
+
     task automatic axil_write(input logic [AXIL_ADDR_WIDTH-1:0] addr, input logic [31:0] data);
         begin
             @(posedge aclk);
@@ -158,6 +207,9 @@ module controller_core_bd_tb;
             s_axi_wvalid <= 1'b0;
 
             wait (s_axi_bvalid);
+            if (s_axi_bresp != 2'b00) begin
+                $fatal(1, "AXI-Lite write got BRESP %0d", s_axi_bresp);
+            end
             @(posedge aclk);
             s_axi_bready <= 1'b0;
         end
@@ -175,9 +227,64 @@ module controller_core_bd_tb;
             s_axi_arvalid <= 1'b0;
 
             wait (s_axi_rvalid);
+            if (s_axi_rresp != 2'b00) begin
+                $fatal(1, "AXI-Lite read got RRESP %0d", s_axi_rresp);
+            end
             data = s_axi_rdata;
             @(posedge aclk);
             s_axi_rready <= 1'b0;
+        end
+    endtask
+
+    task automatic program_one_output(input logic enabled);
+        begin
+            axil_write(PL_REG_CONTROL, 32'd0);
+            axil_write(PL_REG_OUTPUT_COUNT, 32'd1);
+            axil_write(PL_REG_OUTPUT0_PIXEL_COUNT, 32'd4);
+            axil_write(PL_REG_OUTPUT0_BUFFER_OFFSET, 32'd0);
+            axil_write(PL_REG_OUTPUT0_FLAGS, {22'd0, 2'd1, 7'd0, enabled});
+            axil_write(PL_REG_WRITE_BANK, 32'd0);
+            axil_write(PL_REG_FRAME_BASE_ADDR, 32'h0000_1000);
+            axil_write(PL_REG_CONTROL, PL_ENABLE);
+        end
+    endtask
+
+    task automatic commit_frame;
+        begin
+            axil_write(PL_REG_CONTROL, PL_ENABLE | PL_COMMIT_FRAME);
+            axil_write(PL_REG_CONTROL, PL_ENABLE);
+        end
+    endtask
+
+    task automatic expect_completed_frame(input string name, input int unsigned expected_ar, input bit expect_output);
+        logic [31:0] read_value;
+        begin
+            repeat (FRAME_WAIT_CYCLES) @(posedge aclk);
+            axil_read(PL_REG_STATUS, read_value);
+            $display("%s: status=0x%08x ar_count=%0d r_count=%0d ws_high_count=%0d ws_rise_count=%0d",
+                     name, read_value, ar_count, r_count, ws_high_count, ws_rise_count);
+
+            if (read_value != 32'h0000_0000) begin
+                $fatal(1, "%s: expected idle status, got 0x%08x", name, read_value);
+            end
+            if (ar_count != expected_ar || r_count != expected_ar) begin
+                $fatal(1, "%s: expected %0d AXI reads, got AR=%0d R=%0d", name, expected_ar, ar_count, r_count);
+            end
+            if (expect_output && (ws_high_count == 0 || ws_rise_count == 0)) begin
+                $fatal(1, "%s: ws2811_data[0] never toggled", name);
+            end
+            if (!expect_output && (ws_high_count != 0 || ws_rise_count != 0)) begin
+                $fatal(1, "%s: ws2811_data[0] toggled unexpectedly", name);
+            end
+
+            axil_read(PL_REG_FRAME_COUNTER, read_value);
+            if (read_value != 32'd1) begin
+                $fatal(1, "%s: frame counter mismatch: 0x%08x", name, read_value);
+            end
+            axil_read(PL_REG_ACTIVE_BANK, read_value);
+            if (read_value != 32'd0) begin
+                $fatal(1, "%s: active bank mismatch: 0x%08x", name, read_value);
+            end
         end
     endtask
 
@@ -195,27 +302,55 @@ module controller_core_bd_tb;
             m_axi_rvalid <= 1'b0;
             m_axi_rlast <= 1'b0;
             m_axi_rdata <= '0;
+            m_axi_rresp <= 2'b00;
             pending_latency <= -1;
             ar_count <= 0;
             r_count <= 0;
+            missing_arready_cycles <= 0;
         end else begin
-            m_axi_arready <= 1'b1;
+            if (m_axi_awvalid || m_axi_wvalid) begin
+                $fatal(1, "controller_core_bd unexpectedly issued an AXI write");
+            end
+
+            if (axi_mode == AXI_MODE_NO_ARREADY) begin
+                m_axi_arready <= 1'b0;
+            end else if (ar_count == 0 && missing_arready_cycles < ar_ready_delay) begin
+                m_axi_arready <= 1'b0;
+            end else begin
+                m_axi_arready <= 1'b1;
+            end
+
+            if (m_axi_arvalid && !m_axi_arready) begin
+                missing_arready_cycles <= missing_arready_cycles + 1;
+            end
 
             if (m_axi_arvalid && m_axi_arready) begin
+                if (m_axi_arlen != 8'd0 || m_axi_arsize != 3'd2 || m_axi_arburst != 2'b01) begin
+                    $fatal(1, "bad AXI read command len=%0d size=%0d burst=%0d",
+                           m_axi_arlen, m_axi_arsize, m_axi_arburst);
+                end
+                if (m_axi_araddr[1:0] != 2'b00
+                    || m_axi_araddr < 32'h0000_1000
+                    || m_axi_araddr >= 32'h0000_1020) begin
+                    $fatal(1, "unexpected AXI read address: 0x%08x", m_axi_araddr);
+                end
+
                 pending_addr <= m_axi_araddr;
-                pending_latency <= 2;
+                pending_latency <= int'(read_latency);
                 ar_count <= ar_count + 1;
             end else if (pending_latency >= 0) begin
                 pending_latency <= pending_latency - 1;
             end
 
-            if (!m_axi_rvalid && pending_latency == 0) begin
+            if (axi_mode != AXI_MODE_NO_RVALID && !m_axi_rvalid && pending_latency == 0) begin
                 m_axi_rdata <= read_beat(pending_addr);
+                m_axi_rresp <= (axi_mode == AXI_MODE_BAD_RRESP) ? 2'b10 : 2'b00;
                 m_axi_rvalid <= 1'b1;
-                m_axi_rlast <= 1'b1;
+                m_axi_rlast <= (axi_mode == AXI_MODE_MISSING_RLAST) ? 1'b0 : 1'b1;
             end else if (m_axi_rvalid && m_axi_rready) begin
                 m_axi_rvalid <= 1'b0;
                 m_axi_rlast <= 1'b0;
+                m_axi_rresp <= 2'b00;
                 r_count <= r_count + 1;
             end
         end
@@ -245,57 +380,83 @@ module controller_core_bd_tb;
             $dumpvars(0, controller_core_bd_tb);
         end
 
-        pixel_mem[0] = 32'h00ff_0000;
-        pixel_mem[1] = 32'h0000_ff00;
-        pixel_mem[2] = 32'h0000_00ff;
-        pixel_mem[3] = 32'h00ff_ffff;
+        init_pixels();
 
-        repeat (8) @(posedge aclk);
-        aresetn <= 1'b1;
-        repeat (4) @(posedge aclk);
-
-        axil_write(PL_REG_CONTROL, 32'd0);
-        axil_write(PL_REG_OUTPUT_COUNT, 32'd1);
-        axil_write(PL_REG_OUTPUT0_PIXEL_COUNT, 32'd4);
-        axil_write(PL_REG_OUTPUT0_BUFFER_OFFSET, 32'd0);
-        axil_write(PL_REG_OUTPUT0_FLAGS, 32'h0000_0101);
-        axil_write(PL_REG_WRITE_BANK, 32'd0);
-        axil_write(PL_REG_FRAME_BASE_ADDR, 32'h0000_1000);
-        axil_write(PL_REG_CONTROL, PL_ENABLE);
-
+        reset_dut();
+        program_one_output(1'b1);
         axil_read(PL_REG_MAX_PIXELS_PER_OUTPUT, read_value);
         if (read_value != MAX_PIXELS_PER_OUTPUT) begin
             $fatal(1, "bad MAX_PIXELS_PER_OUTPUT readback: 0x%08x", read_value);
         end
+        commit_frame();
+        expect_completed_frame("happy_path", 4, 1);
 
-        axil_write(PL_REG_CONTROL, PL_ENABLE | PL_COMMIT_FRAME);
-        axil_write(PL_REG_CONTROL, PL_ENABLE);
-
-        repeat (22000) @(posedge aclk);
-
-        axil_read(PL_REG_FRAME_COUNTER, read_value);
-        if (read_value != 32'd1) begin
-            $fatal(1, "frame counter did not increment once: 0x%08x", read_value);
+        reset_dut();
+        ar_ready_delay <= 3;
+        read_latency <= 4;
+        program_one_output(1'b1);
+        commit_frame();
+        expect_completed_frame("stalling_axi_recovers", 4, 1);
+        if (missing_arready_cycles == 0) begin
+            $fatal(1, "stalling_axi_recovers: ARREADY was never stalled");
         end
 
-        axil_read(PL_REG_ACTIVE_BANK, read_value);
-        if (read_value != 32'd0) begin
-            $fatal(1, "active bank mismatch: 0x%08x", read_value);
-        end
+        reset_dut();
+        program_one_output(1'b0);
+        commit_frame();
+        expect_completed_frame("disabled_output", 0, 0);
 
+        reset_dut();
+        axi_mode <= AXI_MODE_NO_ARREADY;
+        program_one_output(1'b1);
+        commit_frame();
+        repeat (200) @(posedge aclk);
         axil_read(PL_REG_STATUS, read_value);
-
-        $display("status=0x%08x ar_count=%0d r_count=%0d ws_high_count=%0d ws_rise_count=%0d",
-                 read_value, ar_count, r_count, ws_high_count, ws_rise_count);
-
-        if (ar_count == 0 || r_count == 0) begin
-            $fatal(1, "controller_core_bd did not complete AXI memory reads");
-        end
-        if (ws_high_count == 0 || ws_rise_count == 0) begin
-            $fatal(1, "controller_core_bd did not drive ws2811_data[0]");
+        if ((read_value & PL_BUSY) == 32'h0 || ar_count != 0 || r_count != 0 || ws_high_count != 0) begin
+            $fatal(1, "no_arready: expected busy wait with no accepted reads, status=0x%08x", read_value);
         end
 
-        $display("PASS: AXI-Lite register writes committed a frame and drove ws2811_data[0]");
+        reset_dut();
+        axi_mode <= AXI_MODE_NO_RVALID;
+        program_one_output(1'b1);
+        commit_frame();
+        repeat (200) @(posedge aclk);
+        axil_read(PL_REG_STATUS, read_value);
+        if ((read_value & PL_BUSY) == 32'h0 || ar_count != 1 || r_count != 0 || ws_high_count != 0) begin
+            $fatal(1, "no_rvalid: expected busy wait after one read request, status=0x%08x", read_value);
+        end
+
+        reset_dut();
+        axi_mode <= AXI_MODE_BAD_RRESP;
+        program_one_output(1'b1);
+        commit_frame();
+        repeat (7000) @(posedge aclk);
+        axil_read(PL_REG_STATUS, read_value);
+        $display("bad_rresp: status=0x%08x ar_count=%0d r_count=%0d ws_high_count=%0d",
+                 read_value, ar_count, r_count, ws_high_count);
+        if ((read_value & PL_CONFIG_ERROR) == 32'h0 || (read_value & PL_BUSY) != 32'h0 || ws_high_count != 0) begin
+            $fatal(1, "bad_rresp: expected sticky config error and idle output");
+        end
+        axil_write(PL_REG_CONTROL, 32'd0);
+        repeat (2) @(posedge aclk);
+        axil_read(PL_REG_STATUS, read_value);
+        if ((read_value & PL_CONFIG_ERROR) != 32'h0) begin
+            $fatal(1, "bad_rresp: disabling control did not clear sticky config error");
+        end
+
+        reset_dut();
+        axi_mode <= AXI_MODE_MISSING_RLAST;
+        program_one_output(1'b1);
+        commit_frame();
+        repeat (7000) @(posedge aclk);
+        axil_read(PL_REG_STATUS, read_value);
+        $display("missing_rlast: status=0x%08x ar_count=%0d r_count=%0d ws_high_count=%0d",
+                 read_value, ar_count, r_count, ws_high_count);
+        if ((read_value & PL_CONFIG_ERROR) == 32'h0 || (read_value & PL_BUSY) != 32'h0 || ws_high_count != 0) begin
+            $fatal(1, "missing_rlast: expected sticky config error and idle output");
+        end
+
+        $display("PASS: controller_core_bd AXI-Lite, master AXI, and output scenarios passed");
         $finish;
     end
 

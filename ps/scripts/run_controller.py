@@ -1,4 +1,5 @@
 from pathlib import Path
+import argparse
 import shutil
 import subprocess
 import time
@@ -12,6 +13,8 @@ HW_SERVER_URL = "TCP:localhost:3121"
 BIT_FILE = REPO_ROOT / "build" / "vivado" / "donder_controller.runs" / "impl_1" / "donder_system_wrapper.bit"
 VITIS_WORKSPACE = REPO_ROOT / "build" / "vitis_py"
 PL_BASE = 0x43C00000
+PL_ENABLE = 0x00000001
+PL_PIN_TEST = 0x00000100
 
 SLCR_UNLOCK = 0xF8000008
 SLCR_LOCK = 0xF8000004
@@ -117,12 +120,34 @@ def print_pl_registers(session):
         (0x108, "OUTPUT0_FLAGS"),
         (0x110, "OUTPUT1_PIXEL_COUNT"),
         (0x118, "OUTPUT1_FLAGS"),
+        (0x300, "DBG_READER_STATE"),
+        (0x304, "DBG_READER_OUTPUT_INDEX"),
+        (0x308, "DBG_READER_PIXEL_INDEX"),
+        (0x30C, "DBG_AXI_ARVALID_CYCLES"),
+        (0x310, "DBG_AXI_AR_HANDSHAKES"),
+        (0x314, "DBG_AXI_R_HANDSHAKES"),
+        (0x318, "DBG_AXI_LAST_ARADDR"),
+        (0x31C, "DBG_AXI_LAST_RRESP"),
+        (0x320, "DBG_PIXEL_ACCEPT_COUNT"),
+        (0x324, "DBG_WS_HIGH_COUNT"),
     ]:
         value = mrd32(session, PL_BASE + offset)
         print(f"{name}=0x{value:08x}", flush=True)
 
 
+def enable_pin_test(session):
+    select_target(session, "name=~APU")
+    mwr32(session, PL_BASE + 0x000, PL_ENABLE | PL_PIN_TEST)
+    time.sleep(0.2)
+    print("PIN_TEST_ENABLED", flush=True)
+    print_pl_registers(session)
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pin-test", action="store_true", help="drive PMOD outputs with slow PL square waves instead of running the app")
+    args = parser.parse_args()
+
     if not BIT_FILE.exists():
         raise RuntimeError(f"Missing bitstream: {BIT_FILE}")
 
@@ -164,6 +189,10 @@ def main():
 
         print("PS7_POST_CONFIG", flush=True)
         ps7_post_config(session)
+
+        if args.pin_test:
+            enable_pin_test(session)
+            return 0
 
         print(f"DOWNLOAD_APP {app}", flush=True)
         select_target(session, "name=~*Cortex-A9*#0*")
