@@ -1,0 +1,101 @@
+name: axi_regs
+description: PS/PL register and frame-buffer contract for the Donder controller.
+register_prefix: PL_REG
+field_prefix: PL
+registers:
+  - name: CONTROL
+    offset: 0x000
+    access: rw
+    description: Control register. Commit is a pulse; PL latches it and swaps at a frame boundary.
+    fields:
+      - name: ENABLE
+        bit: 0
+        description: Enable PL output.
+      - name: COMMIT_FRAME
+        bit: 1
+        description: Pulse to submit the currently selected write bank.
+  - name: STATUS
+    offset: 0x004
+    access: ro
+    description: PL status flags.
+    fields:
+      - name: BUSY
+        bit: 0
+        description: PL is actively transmitting a WS2811 frame.
+      - name: FRAME_PENDING
+        bit: 1
+        description: A committed frame is waiting for the next boundary.
+      - name: UNDERRUN
+        bit: 2
+        description: PL had no complete new frame and repeated the previous frame.
+      - name: CONFIG_ERROR
+        bit: 3
+        description: Runtime config exceeds synthesis limits or is internally inconsistent.
+  - name: ACTIVE_BANK
+    offset: 0x008
+    access: ro
+    description: Frame bank currently consumed by PL.
+  - name: WRITE_BANK
+    offset: 0x00c
+    access: rw
+    description: Frame bank the PS is submitting.
+  - name: FRAME_COUNTER
+    offset: 0x010
+    access: ro
+    description: Frames accepted by PL.
+  - name: DROPPED_FRAME_COUNTER
+    offset: 0x014
+    access: ro
+    description: Frames skipped or overwritten before display.
+  - name: LATE_COMMIT_COUNTER
+    offset: 0x018
+    access: ro
+    description: Commits received too late for the configured cadence.
+  - name: OUTPUT_COUNT
+    offset: 0x020
+    access: rw
+    description: Active WS2811 output lane count.
+  - name: MAX_PIXELS_PER_OUTPUT
+    offset: 0x024
+    access: ro
+    description: Synthesis-time maximum pixels per output.
+  - name: FRAME_BASE_ADDR
+    offset: 0x028
+    access: rw
+    description: Physical base address of frame bank 0 in PS DDR.
+  - name: OUTPUT_PIXEL_COUNT
+    offset: 0x100
+    stride: 0x010
+    count_symbol: DONDER_MAX_OUTPUTS
+    access: rw
+    description: Runtime pixel count for output n.
+  - name: OUTPUT_BUFFER_OFFSET
+    offset: 0x104
+    stride: 0x010
+    count_symbol: DONDER_MAX_OUTPUTS
+    access: rw
+    description: Byte offset for output n within each frame bank.
+  - name: OUTPUT_FLAGS
+    offset: 0x108
+    stride: 0x010
+    count_symbol: DONDER_MAX_OUTPUTS
+    access: rw
+    description: Runtime flags for output n.
+    fields:
+      - name: OUTPUT_ENABLE
+        bit: 0
+        description: Enable this output.
+      - name: OUTPUT_REVERSED
+        bit: 1
+        description: Transmit pixels in reverse order.
+      - name: OUTPUT_COLOR_ORDER_LSB
+        bit: 8
+        width: 2
+        description: Color order enum field, bits 9:8.
+framebuffer:
+  banks_symbol: DONDER_FRAME_BANKS
+  outputs_symbol: DONDER_MAX_OUTPUTS
+  pixels_per_output_symbol: DONDER_MAX_PIXELS_PER_OUTPUT
+  pixel_format: 0x00RRGGBB
+  pixel_bytes: 4
+  description: Frame data is stored as 32-bit normalized RGB pixels.

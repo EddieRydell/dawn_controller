@@ -1,0 +1,7 @@
+set_property PACKAGE_PIN Y18 [get_ports {ws2811_data[0]}]
+set_property PACKAGE_PIN Y19 [get_ports {ws2811_data[1]}]
+set_property PACKAGE_PIN Y16 [get_ports {ws2811_data[2]}]
+set_property PACKAGE_PIN Y17 [get_ports {ws2811_data[3]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {ws2811_data[*]}]
+set_property DRIVE 8 [get_ports {ws2811_data[*]}]
+set_property SLEW SLOW [get_ports {ws2811_data[*]}]

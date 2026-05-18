@@ -1,0 +1,18 @@
+# Xilinx generated workspaces and build output
+build/
+.Xil/
+xsim.dir/
+NA/
+
+# Vivado/Vitis logs, journals, and backups
+vivado*.log
+vivado*.jou
+vivado_*.backup.*
+xvlog.log
+xvlog.pb
+*.str
+*.pb
+
+# Misc generated runtime/build files
+dfx_runtime.txt
+
