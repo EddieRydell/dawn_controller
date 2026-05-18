@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define DONDER_MAX_OUTPUTS 16u
+#define DONDER_MAX_OUTPUTS 4u
 #define DONDER_MAX_PIXELS_PER_OUTPUT 1024u
 #define DONDER_FRAME_BANKS 3u
 

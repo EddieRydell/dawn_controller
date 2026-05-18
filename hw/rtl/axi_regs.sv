@@ -42,237 +42,76 @@ module axi_regs #(
     output logic [MAX_OUTPUTS*32-1:0] output_flags_o
 );
 
-    import regs_pkg::*;
+    logic reg_wr_en;
+    logic [ADDR_WIDTH-1:0] reg_wr_addr;
+    logic [31:0] reg_wr_data;
+    logic [3:0] reg_wr_strb;
+    logic reg_rd_en;
+    logic [ADDR_WIDTH-1:0] reg_rd_addr;
+    logic [31:0] reg_rd_data;
 
-    logic [31:0] control_reg;
-    logic [31:0] status_reg;
-    logic [31:0] active_bank_reg;
-    logic [31:0] write_bank_reg;
-    logic [31:0] frame_counter_reg;
-    logic [31:0] dropped_frame_counter_reg;
-    logic [31:0] late_commit_counter_reg;
-    logic [31:0] output_count_reg;
-    logic [31:0] frame_base_addr_reg;
-    logic commit_frame_pulse;
-
-    logic [31:0] output_pixel_count [MAX_OUTPUTS];
-    logic [31:0] output_buffer_offset [MAX_OUTPUTS];
-    logic [31:0] output_flags [MAX_OUTPUTS];
-
-    logic [ADDR_WIDTH-1:0] awaddr_reg;
-    logic [ADDR_WIDTH-1:0] araddr_reg;
-    logic [31:0] wdata_reg;
-    logic [3:0] wstrb_reg;
-    logic aw_pending;
-    logic w_pending;
-
-    wire aw_fire = s_axi_awready && s_axi_awvalid;
-    wire w_fire = s_axi_wready && s_axi_wvalid;
-    wire write_accept = !s_axi_bvalid && (aw_pending || aw_fire) && (w_pending || w_fire);
-    wire read_accept = s_axi_arready && s_axi_arvalid;
-    wire [ADDR_WIDTH-1:0] write_addr = aw_fire ? s_axi_awaddr : awaddr_reg;
-    wire [31:0] write_data = w_fire ? s_axi_wdata : wdata_reg;
-    wire [3:0] write_strb = w_fire ? s_axi_wstrb : wstrb_reg;
-
-    function automatic logic [31:0] apply_wstrb(
-        input logic [31:0] old_value,
-        input logic [31:0] new_value,
-        input logic [3:0] strobe
+    axil_reg_if #(
+        .DATA_WIDTH(32),
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .TIMEOUT(16)
+    ) axi (
+        .clk(s_axi_aclk),
+        .rst(!s_axi_aresetn),
+        .s_axil_awaddr(s_axi_awaddr),
+        .s_axil_awprot(s_axi_awprot),
+        .s_axil_awvalid(s_axi_awvalid),
+        .s_axil_awready(s_axi_awready),
+        .s_axil_wdata(s_axi_wdata),
+        .s_axil_wstrb(s_axi_wstrb),
+        .s_axil_wvalid(s_axi_wvalid),
+        .s_axil_wready(s_axi_wready),
+        .s_axil_bresp(s_axi_bresp),
+        .s_axil_bvalid(s_axi_bvalid),
+        .s_axil_bready(s_axi_bready),
+        .s_axil_araddr(s_axi_araddr),
+        .s_axil_arprot(s_axi_arprot),
+        .s_axil_arvalid(s_axi_arvalid),
+        .s_axil_arready(s_axi_arready),
+        .s_axil_rdata(s_axi_rdata),
+        .s_axil_rresp(s_axi_rresp),
+        .s_axil_rvalid(s_axi_rvalid),
+        .s_axil_rready(s_axi_rready),
+        .reg_wr_en(reg_wr_en),
+        .reg_wr_addr(reg_wr_addr),
+        .reg_wr_data(reg_wr_data),
+        .reg_wr_strb(reg_wr_strb),
+        .reg_wr_wait(1'b0),
+        .reg_wr_ack(reg_wr_en),
+        .reg_rd_addr(reg_rd_addr),
+        .reg_rd_data(reg_rd_data),
+        .reg_rd_wait(1'b0),
+        .reg_rd_ack(reg_rd_en)
     );
-        logic [31:0] merged;
-        begin
-            merged = old_value;
-            for (int i = 0; i < 4; i++) begin
-                if (strobe[i]) begin
-                    merged[i*8 +: 8] = new_value[i*8 +: 8];
-                end
-            end
-            return merged;
-        end
-    endfunction
 
-    function automatic logic [31:0] read_register(input logic [ADDR_WIDTH-1:0] addr);
-        logic [31:0] value;
-        int unsigned output_index;
-        logic [ADDR_WIDTH-1:0] output_offset;
-        begin
-            value = 32'h0000_0000;
-
-            unique case (addr)
-            PL_REG_CONTROL: begin
-                value = control_reg;
-            end
-            PL_REG_STATUS: begin
-                value = status_reg;
-            end
-            PL_REG_ACTIVE_BANK: begin
-                value = active_bank_reg;
-            end
-            PL_REG_WRITE_BANK: begin
-                value = write_bank_reg;
-            end
-            PL_REG_FRAME_COUNTER: begin
-                value = frame_counter_reg;
-            end
-            PL_REG_DROPPED_FRAME_COUNTER: begin
-                value = dropped_frame_counter_reg;
-            end
-            PL_REG_LATE_COMMIT_COUNTER: begin
-                value = late_commit_counter_reg;
-            end
-            PL_REG_OUTPUT_COUNT: begin
-                value = output_count_reg;
-            end
-            PL_REG_MAX_PIXELS_PER_OUTPUT: begin
-                value = MAX_PIXELS_PER_OUTPUT;
-            end
-            PL_REG_FRAME_BASE_ADDR: begin
-                value = frame_base_addr_reg;
-            end
-            default: begin
-                if (addr >= PL_REG_OUTPUT_BASE) begin
-                    output_index = (addr - PL_REG_OUTPUT_BASE) / PL_REG_OUTPUT_STRIDE;
-                    output_offset = (addr - PL_REG_OUTPUT_BASE) % PL_REG_OUTPUT_STRIDE;
-                    if (output_index < MAX_OUTPUTS) begin
-                        unique case (output_offset)
-                        12'h000: value = output_pixel_count[output_index];
-                        12'h004: value = output_buffer_offset[output_index];
-                        12'h008: value = output_flags[output_index];
-                        default: value = 32'h0000_0000;
-                        endcase
-                    end
-                end
-            end
-            endcase
-
-            return value;
-        end
-    endfunction
-
-    always_ff @(posedge s_axi_aclk) begin
-        if (!s_axi_aresetn) begin
-            s_axi_awready <= 1'b1;
-            s_axi_wready <= 1'b1;
-            s_axi_bresp <= 2'b00;
-            s_axi_bvalid <= 1'b0;
-            s_axi_arready <= 1'b1;
-            s_axi_rdata <= 32'h0000_0000;
-            s_axi_rresp <= 2'b00;
-            s_axi_rvalid <= 1'b0;
-            awaddr_reg <= '0;
-            araddr_reg <= '0;
-            wdata_reg <= 32'h0000_0000;
-            wstrb_reg <= 4'h0;
-            aw_pending <= 1'b0;
-            w_pending <= 1'b0;
-
-            control_reg <= 32'h0000_0000;
-            status_reg <= 32'h0000_0000;
-            active_bank_reg <= 32'h0000_0000;
-            write_bank_reg <= 32'h0000_0000;
-            frame_counter_reg <= 32'h0000_0000;
-            dropped_frame_counter_reg <= 32'h0000_0000;
-            late_commit_counter_reg <= 32'h0000_0000;
-            output_count_reg <= 32'h0000_0000;
-            frame_base_addr_reg <= 32'h0000_0000;
-            commit_frame_pulse <= 1'b0;
-
-            for (int i = 0; i < MAX_OUTPUTS; i++) begin
-                output_pixel_count[i] <= 32'h0000_0000;
-                output_buffer_offset[i] <= 32'h0000_0000;
-                output_flags[i] <= 32'h0000_0000;
-            end
-        end else begin
-            status_reg <= status_i;
-            commit_frame_pulse <= 1'b0;
-
-            if (s_axi_awready && s_axi_awvalid) begin
-                awaddr_reg <= s_axi_awaddr;
-            end
-
-            if (s_axi_wready && s_axi_wvalid) begin
-                wdata_reg <= s_axi_wdata;
-                wstrb_reg <= s_axi_wstrb;
-            end
-
-            if (write_accept) begin
-                logic [31:0] next_control;
-                int unsigned output_index;
-                logic [ADDR_WIDTH-1:0] output_offset;
-
-                unique case (write_addr)
-                PL_REG_CONTROL: begin
-                    next_control = apply_wstrb(control_reg, write_data, write_strb);
-                    control_reg <= next_control & ~PL_COMMIT_FRAME;
-                    if (next_control & PL_COMMIT_FRAME) begin
-                        active_bank_reg <= write_bank_reg;
-                        frame_counter_reg <= frame_counter_reg + 32'd1;
-                        commit_frame_pulse <= 1'b1;
-                    end
-                end
-                PL_REG_WRITE_BANK: begin
-                    write_bank_reg <= apply_wstrb(write_bank_reg, write_data, write_strb);
-                end
-                PL_REG_OUTPUT_COUNT: begin
-                    output_count_reg <= apply_wstrb(output_count_reg, write_data, write_strb);
-                end
-                PL_REG_FRAME_BASE_ADDR: begin
-                    frame_base_addr_reg <= apply_wstrb(frame_base_addr_reg, write_data, write_strb);
-                end
-                default: begin
-                    if (write_addr >= PL_REG_OUTPUT_BASE) begin
-                        output_index = (write_addr - PL_REG_OUTPUT_BASE) / PL_REG_OUTPUT_STRIDE;
-                        output_offset = (write_addr - PL_REG_OUTPUT_BASE) % PL_REG_OUTPUT_STRIDE;
-                        if (output_index < MAX_OUTPUTS) begin
-                            unique case (output_offset)
-                            12'h000: output_pixel_count[output_index] <= apply_wstrb(output_pixel_count[output_index], write_data, write_strb);
-                            12'h004: output_buffer_offset[output_index] <= apply_wstrb(output_buffer_offset[output_index], write_data, write_strb);
-                            12'h008: output_flags[output_index] <= apply_wstrb(output_flags[output_index], write_data, write_strb);
-                            default: begin
-                            end
-                            endcase
-                        end
-                    end
-                end
-                endcase
-
-                s_axi_bvalid <= 1'b1;
-                s_axi_bresp <= 2'b00;
-                aw_pending <= 1'b0;
-                w_pending <= 1'b0;
-            end else if (s_axi_bvalid && s_axi_bready) begin
-                s_axi_bvalid <= 1'b0;
-            end else begin
-                if (aw_fire) begin
-                    aw_pending <= 1'b1;
-                end
-                if (w_fire) begin
-                    w_pending <= 1'b1;
-                end
-            end
-
-            if (read_accept) begin
-                araddr_reg <= s_axi_araddr;
-                s_axi_rdata <= read_register(s_axi_araddr);
-                s_axi_rvalid <= 1'b1;
-                s_axi_rresp <= 2'b00;
-            end else if (s_axi_rvalid && s_axi_rready) begin
-                s_axi_rvalid <= 1'b0;
-            end
-        end
-    end
-
-    assign control_o = control_reg;
-    assign commit_frame_o = commit_frame_pulse;
-    assign active_bank_o = active_bank_reg;
-    assign write_bank_o = write_bank_reg;
-    assign frame_base_addr_o = frame_base_addr_reg;
-    assign output_count_o = output_count_reg;
-
-    for (genvar output_index = 0; output_index < MAX_OUTPUTS; output_index++) begin : gen_config_outputs
-        assign output_pixel_count_o[output_index*32 +: 32] = output_pixel_count[output_index];
-        assign output_buffer_offset_o[output_index*32 +: 32] = output_buffer_offset[output_index];
-        assign output_flags_o[output_index*32 +: 32] = output_flags[output_index];
-    end
+    controller_regs #(
+        .MAX_OUTPUTS(MAX_OUTPUTS),
+        .MAX_PIXELS_PER_OUTPUT(MAX_PIXELS_PER_OUTPUT),
+        .ADDR_WIDTH(ADDR_WIDTH)
+    ) regs (
+        .clk(s_axi_aclk),
+        .rst_n(s_axi_aresetn),
+        .reg_wr_en(reg_wr_en),
+        .reg_wr_addr(reg_wr_addr),
+        .reg_wr_data(reg_wr_data),
+        .reg_wr_strb(reg_wr_strb),
+        .reg_rd_en(reg_rd_en),
+        .reg_rd_addr(reg_rd_addr),
+        .reg_rd_data(reg_rd_data),
+        .status_i(status_i),
+        .control_o(control_o),
+        .commit_frame_o(commit_frame_o),
+        .active_bank_o(active_bank_o),
+        .write_bank_o(write_bank_o),
+        .frame_base_addr_o(frame_base_addr_o),
+        .output_count_o(output_count_o),
+        .output_pixel_count_o(output_pixel_count_o),
+        .output_buffer_offset_o(output_buffer_offset_o),
+        .output_flags_o(output_flags_o)
+    );
 
 endmodule

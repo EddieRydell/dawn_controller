@@ -3,6 +3,7 @@ build/
 .Xil/
 xsim.dir/
 NA/
+.idea/
 
 # Vivado/Vitis logs, journals, and backups
 vivado*.log
