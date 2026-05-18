@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module axi_regs #(
     parameter int unsigned MAX_OUTPUTS = 16,
     parameter int unsigned MAX_PIXELS_PER_OUTPUT = 1024,
@@ -83,6 +85,7 @@ module axi_regs #(
         .reg_wr_wait(1'b0),
         .reg_wr_ack(reg_wr_en),
         .reg_rd_addr(reg_rd_addr),
+        .reg_rd_en(reg_rd_en),
         .reg_rd_data(reg_rd_data),
         .reg_rd_wait(1'b0),
         .reg_rd_ack(reg_rd_en)

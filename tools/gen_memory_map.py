@@ -82,6 +82,8 @@ def generate_sv_package(spec):
     reg_prefix = spec.get("register_prefix", "PL_REG")
     field_prefix = spec.get("field_prefix", "PL")
     lines = [
+        "`timescale 1ns / 1ps",
+        "",
         "// Generated from memory_map.yaml. Do not edit by hand.",
         "package regs_pkg;",
         "",

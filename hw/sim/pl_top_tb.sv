@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module pl_top_tb;
 
     localparam int unsigned MAX_OUTPUTS = 2;
@@ -141,8 +143,10 @@ module pl_top_tb;
     end
 
     initial begin
-        $dumpfile("pl_top_tb.vcd");
-        $dumpvars(0, pl_top_tb);
+        if ($test$plusargs("DUMP")) begin
+            $dumpfile("pl_top_tb.vcd");
+            $dumpvars(0, pl_top_tb);
+        end
 
         pixel_mem[0] = 32'h00ff_0000;
         pixel_mem[1] = 32'h0000_ff00;

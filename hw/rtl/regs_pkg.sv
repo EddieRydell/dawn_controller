@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 // Generated from memory_map.yaml. Do not edit by hand.
 package regs_pkg;
 

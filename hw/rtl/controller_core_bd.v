@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module controller_core_bd #(
     parameter MAX_OUTPUTS = 16,
     parameter MAX_PIXELS_PER_OUTPUT = 1024,

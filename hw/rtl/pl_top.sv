@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module pl_top #(
     parameter int unsigned MAX_OUTPUTS = 16,
     parameter int unsigned MAX_PIXELS_PER_OUTPUT = 1024,

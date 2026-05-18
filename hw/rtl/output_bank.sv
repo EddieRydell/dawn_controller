@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module output_bank #(
     parameter int unsigned MAX_OUTPUTS = 16,
     parameter int unsigned CLK_HZ = 100_000_000,

@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module frame_reader #(
     parameter int unsigned MAX_OUTPUTS = 16,
     parameter int unsigned MAX_PIXELS_PER_OUTPUT = 1024,
@@ -58,7 +60,6 @@ module frame_reader #(
     logic [31:0] current_pixel_count;
     logic [31:0] current_output_flags;
     logic [31:0] current_buffer_offset;
-    logic [ADDR_WIDTH-1:0] read_addr;
     logic read_upper_word;
 
     function automatic logic [23:0] apply_color_order(
@@ -87,6 +88,21 @@ module frame_reader #(
         end
     endfunction
 
+    function automatic logic [ADDR_WIDTH-1:0] pixel_read_addr(input logic [31:0] index);
+        begin
+            pixel_read_addr = frame_base_addr
+                + frame_bank_offset(active_bank)
+                + current_buffer_offset
+                + (index * PIXEL_BYTES);
+        end
+    endfunction
+
+    function automatic logic pixel_read_upper_word(input logic [31:0] index);
+        begin
+            pixel_read_upper_word = (pixel_read_addr(index) & 32'd4) != 32'd0;
+        end
+    endfunction
+
     always_ff @(posedge clk) begin
         if (!rst_n) begin
             m_axi_araddr <= '0;
@@ -107,7 +123,6 @@ module frame_reader #(
             current_pixel_count <= 32'd0;
             current_output_flags <= 32'd0;
             current_buffer_offset <= 32'd0;
-            read_addr <= '0;
             read_upper_word <= 1'b0;
         end else begin
             m_axi_rready <= 1'b0;
@@ -159,18 +174,11 @@ module frame_reader #(
             end
 
             STATE_ISSUE_READ: begin
-                logic [ADDR_WIDTH-1:0] next_read_addr;
-
                 busy <= 1'b1;
 
                 if (!m_axi_arvalid) begin
-                    next_read_addr = frame_base_addr
-                        + frame_bank_offset(active_bank)
-                        + current_buffer_offset
-                        + (pixel_index * PIXEL_BYTES);
-                    read_addr <= next_read_addr;
-                    read_upper_word <= next_read_addr[2];
-                    m_axi_araddr <= next_read_addr;
+                    read_upper_word <= pixel_read_upper_word(pixel_index);
+                    m_axi_araddr <= pixel_read_addr(pixel_index);
                     m_axi_arlen <= 8'd0;
                     m_axi_arsize <= 3'd2;
                     m_axi_arburst <= 2'b01;
@@ -186,16 +194,17 @@ module frame_reader #(
                 m_axi_rready <= 1'b1;
 
                 if (m_axi_rvalid && m_axi_rready) begin
-                    logic [31:0] pixel_word;
-                    logic [23:0] ordered_pixel;
-
-                    pixel_word = read_upper_word ? m_axi_rdata[63:32] : m_axi_rdata[31:0];
-                    ordered_pixel = apply_color_order(pixel_word[23:0],
-                        current_output_flags[9:8]);
-                    pixel_rgb_flat[output_index*24 +: 24] <= ordered_pixel;
-                    pixel_valid[output_index] <= 1'b1;
-                    output_end_frame[output_index] <= (pixel_index == current_pixel_count - 32'd1);
-                    state <= STATE_HAVE_PIXEL;
+                    if (m_axi_rresp != 2'b00 || !m_axi_rlast) begin
+                        config_error <= 1'b1;
+                        state <= STATE_DONE;
+                    end else begin
+                        pixel_rgb_flat[output_index*24 +: 24] <= apply_color_order(
+                            read_upper_word ? m_axi_rdata[55:32] : m_axi_rdata[23:0],
+                            current_output_flags[9:8]);
+                        pixel_valid[output_index] <= 1'b1;
+                        output_end_frame[output_index] <= (pixel_index == current_pixel_count - 32'd1);
+                        state <= STATE_HAVE_PIXEL;
+                    end
                 end
             end
 

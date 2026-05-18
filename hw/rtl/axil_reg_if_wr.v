@@ -73,7 +73,7 @@ module axil_reg_if_wr #
     input  wire                   reg_wr_ack
 );
 
-parameter TIMEOUT_WIDTH = $clog2(TIMEOUT);
+localparam TIMEOUT_WIDTH = $clog2(TIMEOUT);
 
 reg [TIMEOUT_WIDTH-1:0] timeout_count_reg = 0, timeout_count_next;
 

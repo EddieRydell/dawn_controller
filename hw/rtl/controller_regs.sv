@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module controller_regs #(
     parameter int unsigned MAX_OUTPUTS = 16,
     parameter int unsigned MAX_PIXELS_PER_OUTPUT = 1024,
@@ -11,6 +13,7 @@ module controller_regs #(
     input  logic [31:0]            reg_wr_data,
     input  logic [3:0]             reg_wr_strb,
 
+    input  logic                   reg_rd_en,
     input  logic [ADDR_WIDTH-1:0]  reg_rd_addr,
     output logic [31:0]            reg_rd_data,
 
@@ -99,7 +102,7 @@ module controller_regs #(
     endfunction
 
     always_comb begin
-        reg_rd_data = read_register(reg_rd_addr);
+        reg_rd_data = reg_rd_en ? read_register(reg_rd_addr) : 32'h0000_0000;
     end
 
     always_ff @(posedge clk) begin
@@ -125,15 +128,10 @@ module controller_regs #(
             commit_frame_pulse <= 1'b0;
 
             if (reg_wr_en) begin
-                logic [31:0] next_control;
-                int unsigned output_index;
-                logic [ADDR_WIDTH-1:0] output_offset;
-
                 unique case (reg_wr_addr)
                 PL_REG_CONTROL: begin
-                    next_control = apply_wstrb(control_reg, reg_wr_data, reg_wr_strb);
-                    control_reg <= next_control & ~PL_COMMIT_FRAME;
-                    if (next_control & PL_COMMIT_FRAME) begin
+                    control_reg <= apply_wstrb(control_reg, reg_wr_data, reg_wr_strb) & ~PL_COMMIT_FRAME;
+                    if (apply_wstrb(control_reg, reg_wr_data, reg_wr_strb) & PL_COMMIT_FRAME) begin
                         active_bank_reg <= write_bank_reg;
                         frame_counter_reg <= frame_counter_reg + 32'd1;
                         commit_frame_pulse <= 1'b1;
@@ -149,17 +147,13 @@ module controller_regs #(
                     frame_base_addr_reg <= apply_wstrb(frame_base_addr_reg, reg_wr_data, reg_wr_strb);
                 end
                 default: begin
-                    if (reg_wr_addr >= PL_REG_OUTPUT_BASE) begin
-                        output_index = (reg_wr_addr - PL_REG_OUTPUT_BASE) / PL_REG_OUTPUT_STRIDE;
-                        output_offset = (reg_wr_addr - PL_REG_OUTPUT_BASE) % PL_REG_OUTPUT_STRIDE;
-                        if (output_index < MAX_OUTPUTS) begin
-                            unique case (output_offset)
-                            12'h000: output_pixel_count[output_index] <= apply_wstrb(output_pixel_count[output_index], reg_wr_data, reg_wr_strb);
-                            12'h004: output_buffer_offset[output_index] <= apply_wstrb(output_buffer_offset[output_index], reg_wr_data, reg_wr_strb);
-                            12'h008: output_flags[output_index] <= apply_wstrb(output_flags[output_index], reg_wr_data, reg_wr_strb);
-                            default: begin
-                            end
-                            endcase
+                    for (int i = 0; i < MAX_OUTPUTS; i++) begin
+                        if (reg_wr_addr == PL_REG_OUTPUT_BASE + (i * PL_REG_OUTPUT_STRIDE)) begin
+                            output_pixel_count[i] <= apply_wstrb(output_pixel_count[i], reg_wr_data, reg_wr_strb);
+                        end else if (reg_wr_addr == PL_REG_OUTPUT_BASE + (i * PL_REG_OUTPUT_STRIDE) + 12'h004) begin
+                            output_buffer_offset[i] <= apply_wstrb(output_buffer_offset[i], reg_wr_data, reg_wr_strb);
+                        end else if (reg_wr_addr == PL_REG_OUTPUT_BASE + (i * PL_REG_OUTPUT_STRIDE) + 12'h008) begin
+                            output_flags[i] <= apply_wstrb(output_flags[i], reg_wr_data, reg_wr_strb);
                         end
                     end
                 end

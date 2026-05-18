@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module ws2811_tx #(
     parameter int unsigned CLK_HZ = 100_000_000,
     parameter int unsigned T0H_NS = 250,
