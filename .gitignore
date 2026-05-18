@@ -6,11 +6,11 @@ NA/
 .idea/
 
 # Vivado/Vitis logs, journals, and backups
-vivado*.log
-vivado*.jou
+*.log
+*.jou
+*.wdb
+*.vcd
 vivado_*.backup.*
-xvlog.log
-xvlog.pb
 *.str
 *.pb
 
