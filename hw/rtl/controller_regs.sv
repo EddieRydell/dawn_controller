@@ -52,6 +52,7 @@ module controller_regs #(
     logic [31:0] output_count_reg;
     logic [31:0] frame_base_addr_reg;
     logic commit_frame_pulse;
+    logic commit_ready;
 
     logic [31:0] output_pixel_count [MAX_OUTPUTS];
     logic [31:0] output_buffer_offset [MAX_OUTPUTS];
@@ -126,6 +127,10 @@ module controller_regs #(
         reg_rd_data = reg_rd_en ? read_register(reg_rd_addr) : 32'h0000_0000;
     end
 
+    assign commit_ready = ((control_reg & PL_ENABLE) != 32'h0)
+        && ((status_i & (PL_BUSY | PL_FRAME_PENDING)) == 32'h0)
+        && ((status_reg & PL_CONFIG_ERROR) == 32'h0);
+
     always_ff @(posedge clk) begin
         if (!rst_n) begin
             control_reg <= 32'h0000_0000;
@@ -146,6 +151,7 @@ module controller_regs #(
             end
         end else begin
             status_reg <= (status_i & (PL_BUSY | PL_FRAME_PENDING))
+                | (commit_ready ? PL_READY_FOR_FRAME : 32'h0000_0000)
                 | ((status_reg | status_i) & (PL_UNDERRUN | PL_CONFIG_ERROR));
             commit_frame_pulse <= 1'b0;
 
@@ -157,9 +163,13 @@ module controller_regs #(
                         status_reg <= status_i & (PL_BUSY | PL_FRAME_PENDING);
                     end
                     if (apply_wstrb(control_reg, reg_wr_data, reg_wr_strb) & PL_COMMIT_FRAME) begin
-                        active_bank_reg <= write_bank_reg;
-                        frame_counter_reg <= frame_counter_reg + 32'd1;
-                        commit_frame_pulse <= 1'b1;
+                        if (commit_ready) begin
+                            active_bank_reg <= write_bank_reg;
+                            frame_counter_reg <= frame_counter_reg + 32'd1;
+                            commit_frame_pulse <= 1'b1;
+                        end else begin
+                            late_commit_counter_reg <= late_commit_counter_reg + 32'd1;
+                        end
                     end
                 end
                 PL_REG_WRITE_BANK: begin

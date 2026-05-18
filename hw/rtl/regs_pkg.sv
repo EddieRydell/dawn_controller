@@ -12,6 +12,7 @@ package regs_pkg;
     localparam logic [31:0] PL_FRAME_PENDING = 32'h00000002;
     localparam logic [31:0] PL_UNDERRUN = 32'h00000004;
     localparam logic [31:0] PL_CONFIG_ERROR = 32'h00000008;
+    localparam logic [31:0] PL_READY_FOR_FRAME = 32'h00000010;
 
     localparam int unsigned PL_REG_ACTIVE_BANK = 32'h008;
 

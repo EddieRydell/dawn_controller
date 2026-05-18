@@ -5,6 +5,8 @@ xsim.dir/
 NA/
 .idea/
 
+**__pycache**
+
 # Vivado/Vitis logs, journals, and backups
 *.log
 *.jou

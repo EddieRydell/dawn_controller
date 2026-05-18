@@ -14,11 +14,13 @@ module controller_core_bd_tb;
     localparam logic [31:0] PL_COMMIT_FRAME = 32'h0000_0002;
     localparam logic [31:0] PL_BUSY = 32'h0000_0001;
     localparam logic [31:0] PL_CONFIG_ERROR = 32'h0000_0008;
+    localparam logic [31:0] PL_READY_FOR_FRAME = 32'h0000_0010;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_CONTROL = 12'h000;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_STATUS = 12'h004;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_ACTIVE_BANK = 12'h008;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_WRITE_BANK = 12'h00c;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_FRAME_COUNTER = 12'h010;
+    localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_LATE_COMMIT_COUNTER = 12'h018;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_OUTPUT_COUNT = 12'h020;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_MAX_PIXELS_PER_OUTPUT = 12'h024;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_FRAME_BASE_ADDR = 12'h028;
@@ -264,7 +266,7 @@ module controller_core_bd_tb;
             $display("%s: status=0x%08x ar_count=%0d r_count=%0d ws_high_count=%0d ws_rise_count=%0d",
                      name, read_value, ar_count, r_count, ws_high_count, ws_rise_count);
 
-            if (read_value != 32'h0000_0000) begin
+            if (read_value != PL_READY_FOR_FRAME) begin
                 $fatal(1, "%s: expected idle status, got 0x%08x", name, read_value);
             end
             if (ar_count != expected_ar || r_count != expected_ar) begin
@@ -405,6 +407,23 @@ module controller_core_bd_tb;
         program_one_output(1'b0);
         commit_frame();
         expect_completed_frame("disabled_output", 0, 0);
+
+        reset_dut();
+        program_one_output(1'b1);
+        axil_write(PL_REG_WRITE_BANK, 32'd0);
+        commit_frame();
+        repeat (20) @(posedge aclk);
+        axil_write(PL_REG_WRITE_BANK, 32'd1);
+        commit_frame();
+        axil_read(PL_REG_LATE_COMMIT_COUNTER, read_value);
+        if (read_value != 32'd1) begin
+            $fatal(1, "late_commit_rejected: expected one late commit, got 0x%08x", read_value);
+        end
+        axil_read(PL_REG_ACTIVE_BANK, read_value);
+        if (read_value != 32'd0) begin
+            $fatal(1, "late_commit_rejected: active bank changed on rejected commit: 0x%08x", read_value);
+        end
+        expect_completed_frame("late_commit_rejected", 4, 1);
 
         reset_dut();
         axi_mode <= AXI_MODE_NO_ARREADY;

@@ -12,6 +12,7 @@ uint32_t pl_get_status(void);
 uint32_t pl_get_frame_counter(void);
 uint32_t pl_get_output_count(void);
 uint32_t pl_get_max_pixels_per_output(void);
+uint32_t pl_ready_for_frame(void);
 void pl_set_write_bank(uint32_t bank);
 void pl_commit_frame(uint32_t bank);
 uint32_t pl_get_active_bank(void);

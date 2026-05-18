@@ -12,9 +12,9 @@ PS/PL register and frame-buffer contract for the Donder controller.
 | `0x004` | `STATUS` | RO | PL status flags. |
 | `0x008` | `ACTIVE_BANK` | RO | Frame bank currently consumed by PL. |
 | `0x00c` | `WRITE_BANK` | RW | Frame bank the PS is submitting. |
-| `0x010` | `FRAME_COUNTER` | RO | Frames accepted by PL. |
-| `0x014` | `DROPPED_FRAME_COUNTER` | RO | Frames skipped or overwritten before display. |
-| `0x018` | `LATE_COMMIT_COUNTER` | RO | Commits received too late for the configured cadence. |
+| `0x010` | `FRAME_COUNTER` | RO | Frame commits accepted by PL. |
+| `0x014` | `DROPPED_FRAME_COUNTER` | RO | Reserved for queued-frame overwrite/drop accounting. |
+| `0x018` | `LATE_COMMIT_COUNTER` | RO | Commits rejected because PL was not ready for a new frame. |
 | `0x020` | `OUTPUT_COUNT` | RW | Active WS2811 output lane count. |
 | `0x024` | `MAX_PIXELS_PER_OUTPUT` | RO | Synthesis-time maximum pixels per output. |
 | `0x028` | `FRAME_BASE_ADDR` | RW | Physical base address of frame bank 0 in PS DDR. |
@@ -30,8 +30,9 @@ PS/PL register and frame-buffer contract for the Donder controller.
 | `CONTROL` | `COMMIT_FRAME` | `1` | Pulse to submit the currently selected write bank. |
 | `STATUS` | `BUSY` | `0` | PL is actively transmitting a WS2811 frame. |
 | `STATUS` | `FRAME_PENDING` | `1` | A committed frame is waiting for the next boundary. |
-| `STATUS` | `UNDERRUN` | `2` | PL had no complete new frame and repeated the previous frame. |
+| `STATUS` | `UNDERRUN` | `2` | WS transmitter ran out of pixel data during an active frame. |
 | `STATUS` | `CONFIG_ERROR` | `3` | Runtime config exceeds synthesis limits or is internally inconsistent. |
+| `STATUS` | `READY_FOR_FRAME` | `4` | PL is enabled and ready to accept a new frame commit. |
 | `OUTPUT_FLAGS` | `OUTPUT_ENABLE` | `0` | Enable this output. |
 | `OUTPUT_FLAGS` | `OUTPUT_REVERSED` | `1` | Transmit pixels in reverse order. |
 | `OUTPUT_FLAGS` | `OUTPUT_COLOR_ORDER_LSB` | `9:8` | Color order enum field, bits 9:8. |
@@ -55,6 +56,7 @@ bank_base + output_buffer_offset[n] + pixel_index * pixel_bytes
 ## Determinism Contract
 
 - PL never stalls a WS2811 waveform once started.
-- PL only swaps banks at a frame boundary.
-- PL repeats the previous frame if no complete new frame is ready.
-- PS only writes the inactive bank.
+- PL only accepts a frame commit when `STATUS.READY_FOR_FRAME` is set.
+- PL rejects commits while busy and increments `LATE_COMMIT_COUNTER`.
+- PL never changes `ACTIVE_BANK` for a rejected commit.
+- PS only submits a frame after the target bank has been fully written and cache-flushed.

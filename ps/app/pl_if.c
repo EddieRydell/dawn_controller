@@ -67,6 +67,11 @@ uint32_t pl_get_max_pixels_per_output(void)
     return pl_read(PL_REG_MAX_PIXELS_PER_OUTPUT);
 }
 
+uint32_t pl_ready_for_frame(void)
+{
+    return (pl_get_status() & PL_READY_FOR_FRAME) != 0u;
+}
+
 void pl_set_write_bank(uint32_t bank)
 {
     pl_write(PL_REG_WRITE_BANK, bank);

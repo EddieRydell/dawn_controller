@@ -112,6 +112,8 @@ def print_pl_registers(session):
         (0x008, "ACTIVE_BANK"),
         (0x00C, "WRITE_BANK"),
         (0x010, "FRAME_COUNTER"),
+        (0x014, "DROPPED_FRAME_COUNTER"),
+        (0x018, "LATE_COMMIT_COUNTER"),
         (0x020, "OUTPUT_COUNT"),
         (0x024, "MAX_PIXELS_PER_OUTPUT"),
         (0x028, "FRAME_BASE_ADDR"),
@@ -119,7 +121,14 @@ def print_pl_registers(session):
         (0x104, "OUTPUT0_BUFFER_OFFSET"),
         (0x108, "OUTPUT0_FLAGS"),
         (0x110, "OUTPUT1_PIXEL_COUNT"),
+        (0x114, "OUTPUT1_BUFFER_OFFSET"),
         (0x118, "OUTPUT1_FLAGS"),
+        (0x120, "OUTPUT2_PIXEL_COUNT"),
+        (0x124, "OUTPUT2_BUFFER_OFFSET"),
+        (0x128, "OUTPUT2_FLAGS"),
+        (0x130, "OUTPUT3_PIXEL_COUNT"),
+        (0x134, "OUTPUT3_BUFFER_OFFSET"),
+        (0x138, "OUTPUT3_FLAGS"),
         (0x300, "DBG_READER_STATE"),
         (0x304, "DBG_READER_OUTPUT_INDEX"),
         (0x308, "DBG_READER_PIXEL_INDEX"),
@@ -146,6 +155,7 @@ def enable_pin_test(session):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pin-test", action="store_true", help="drive PMOD outputs with slow PL square waves instead of running the app")
+    parser.add_argument("--poll-seconds", type=float, default=5.0, help="register polling interval while the run is held open")
     args = parser.parse_args()
 
     if not BIT_FILE.exists():
@@ -201,9 +211,12 @@ def main():
         session.dow(file=str(app))
         session.con()
 
-        time.sleep(1)
-        print("PL_REGS_AFTER_APP", flush=True)
-        print_pl_registers(session)
+        sample = 0
+        while True:
+            time.sleep(args.poll_seconds)
+            sample += 1
+            print(f"PL_REGS_SAMPLE_{sample}", flush=True)
+            print_pl_registers(session)
 
     except Exception as exc:
         print(f"ERROR: {exc}", flush=True)

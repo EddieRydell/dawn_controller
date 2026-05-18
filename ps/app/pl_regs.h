@@ -13,6 +13,7 @@
 #define PL_FRAME_PENDING                       (1u << 1)
 #define PL_UNDERRUN                            (1u << 2)
 #define PL_CONFIG_ERROR                        (1u << 3)
+#define PL_READY_FOR_FRAME                     (1u << 4)
 
 #define PL_REG_ACTIVE_BANK                    0x008u
 

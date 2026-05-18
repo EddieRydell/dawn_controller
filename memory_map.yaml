@@ -27,10 +27,13 @@ registers:
         description: A committed frame is waiting for the next boundary.
       - name: UNDERRUN
         bit: 2
-        description: PL had no complete new frame and repeated the previous frame.
+        description: WS transmitter ran out of pixel data during an active frame.
       - name: CONFIG_ERROR
         bit: 3
         description: Runtime config exceeds synthesis limits or is internally inconsistent.
+      - name: READY_FOR_FRAME
+        bit: 4
+        description: PL is enabled and ready to accept a new frame commit.
   - name: ACTIVE_BANK
     offset: 0x008
     access: ro
@@ -42,15 +45,15 @@ registers:
   - name: FRAME_COUNTER
     offset: 0x010
     access: ro
-    description: Frames accepted by PL.
+    description: Frame commits accepted by PL.
   - name: DROPPED_FRAME_COUNTER
     offset: 0x014
     access: ro
-    description: Frames skipped or overwritten before display.
+    description: Reserved for queued-frame overwrite/drop accounting.
   - name: LATE_COMMIT_COUNTER
     offset: 0x018
     access: ro
-    description: Commits received too late for the configured cadence.
+    description: Commits rejected because PL was not ready for a new frame.
   - name: OUTPUT_COUNT
     offset: 0x020
     access: rw

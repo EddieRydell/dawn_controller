@@ -5,40 +5,18 @@
 #include "xil_cache.h"
 #include "xil_printf.h"
 
-static void wait_for_frame_complete(void)
+static void wait_for_frame_ready(void)
 {
-    uint32_t saw_busy = 0u;
-    uint32_t timeout = 1000000u;
-
-    while (timeout-- != 0u) {
-        uint32_t status = pl_get_status();
-        if ((status & PL_BUSY) != 0u) {
-            saw_busy = 1u;
-        } else if (saw_busy != 0u) {
-            break;
-        }
+    while (!pl_ready_for_frame()) {
     }
 }
 
-static void write_sample_frame(uint32_t bank, uint32_t phase)
+static void write_sample_frame(uint32_t bank)
 {
     for (uint32_t output = 0u; output < g_config.output_count; ++output) {
         uint32_t pixels = g_config.outputs[output].pixel_count;
         for (uint32_t pixel = 0u; pixel < pixels; ++pixel) {
-            switch ((pixel + phase) & 3u) {
-            case 0u:
-                framebuffer_write_rgb(bank, output, pixel, 255u, 0u, 0u);
-                break;
-            case 1u:
-                framebuffer_write_rgb(bank, output, pixel, 0u, 255u, 0u);
-                break;
-            case 2u:
-                framebuffer_write_rgb(bank, output, pixel, 0u, 0u, 255u);
-                break;
-            default:
-                framebuffer_write_rgb(bank, output, pixel, 255u, 255u, 255u);
-                break;
-            }
+            framebuffer_write_rgb(bank, output, pixel, 255u, 0u, 0u);
         }
     }
     framebuffer_flush_bank(bank);
@@ -62,12 +40,11 @@ int main(void)
                (unsigned long)pl_get_status(),
                (unsigned long)pl_get_frame_counter());
 
-    uint32_t phase = 0u;
     while (1) {
         uint32_t bank = framebuffer_begin_write_bank();
-        write_sample_frame(bank, phase);
+        write_sample_frame(bank);
+        wait_for_frame_ready();
         pl_commit_frame(bank);
-        wait_for_frame_complete();
-        phase++;
+        wait_for_frame_ready();
     }
 }

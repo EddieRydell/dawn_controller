@@ -180,9 +180,10 @@ def generate_markdown(spec):
         "## Determinism Contract",
         "",
         "- PL never stalls a WS2811 waveform once started.",
-        "- PL only swaps banks at a frame boundary.",
-        "- PL repeats the previous frame if no complete new frame is ready.",
-        "- PS only writes the inactive bank.",
+        "- PL only accepts a frame commit when `STATUS.READY_FOR_FRAME` is set.",
+        "- PL rejects commits while busy and increments `LATE_COMMIT_COUNTER`.",
+        "- PL never changes `ACTIVE_BANK` for a rejected commit.",
+        "- PS only submits a frame after the target bank has been fully written and cache-flushed.",
         "",
     ])
     return "\n".join(lines)
