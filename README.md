@@ -1,66 +1,90 @@
 # Donder Controller
 
-Bare-metal Zynq/PYNQ-Z2 scaffold for a WS281x Christmas light controller.
+Production-oriented PYNQ-Z2 foundation for Ethernet-to-PL projects and an E1.31-to-WS2811 light controller.
 
-The intended architecture is:
-
-```text
-Vixen -> Ethernet -> Zynq PS bare-metal UDP receiver -> shared frame buffers -> PL WS2811 engines
-```
-
-The onboard PYNQ-Z2 Ethernet PHY is connected to the Zynq PS MIO pins, so this project starts with packet ingress on the PS and keeps deterministic pixel timing in PL.
-
-## Layout
+The foundation is intentionally one path:
 
 ```text
-hw/
-  constraints/       XDC files
-  scripts/           Vivado batch Tcl
-  rtl/               PL SystemVerilog
-ps/
-  app/               bare-metal C application
-  scripts/           Vitis batch scripts
-docs/
-  memory_map.md      PS/PL register and buffer contract
+Zynq PS bare-metal app
+  -> onboard PS Ethernet path, next integration step
+  -> frame assembly in PS memory
+  -> M_AXI_GP0 AXI-Lite writes
+  -> eth_frame_core PL frame sink
+  -> deterministic PL consumer, next integration step
 ```
 
-## First Build Targets
+The current PL contract already supports full-frame delivery into PL-owned storage. Ethernet receive and WS2811 output should be added behind this same contract, not as parallel scripts or alternate runtime modes.
 
-1. Generate/export a Vivado hardware design with Zynq PS, AXI-Lite control, and an AXI HP path for PL frame reads.
-2. Build the bare-metal PS app from batch mode.
-3. Generate a known sample frame in the PS.
-4. Commit the frame to PL at a deterministic boundary.
-5. Later: receive UDP port `5568` E1.31 packets on the PS and map them into the same framebuffer.
+## Commands
 
-The current program generates sample pixel data only in the PS. The PL must not contain a sample-pattern generator or alternate data source. The PL register contract is centralized in `memory_map.yaml`; generated C/SystemVerilog/docs outputs are derived from that file.
-
-## Tooling
-
-Vivado/Vitis are expected to be run in batch mode. If the Xilinx tools are not on `PATH`, launch these from the Xilinx command prompt or call the full executable paths.
+Run from a Xilinx-enabled shell where Vivado, Vitis, Bootgen, XSDB, and hw_server are on `PATH`.
 
 ```powershell
-make memmap
+make clean
 make hw
 make ps
+make boot
+```
+
+For JTAG development:
+
+```powershell
 make run
 ```
 
-`make all` runs `memmap`, `hw`, and `ps`. `make hw` suppresses Vivado's root-level log and journal files.
-
-`memory_map.yaml` is the source of truth for PS/PL registers. Do not edit `ps/app/pl_regs.h`, `hw/rtl/regs_pkg.sv`, or `docs/memory_map.md` by hand.
-
-The PS app build uses the current Vitis Python CLI flow. The script creates a platform from the exported XSA, configures the standalone domain, imports `ps/app`, and builds the application component. Older XSCT/Tcl app-generation scripts are intentionally not kept in this tree because they hang in Vitis 2025.1 on this machine.
-
-`make run` programs the main FPGA bitstream, runs the generated FSBL to initialize PS/DDR, downloads the single bare-metal app, and reads back the PL registers that the app configured over AXI.
-
-## Software Notes
-
-The PS app currently generates one deterministic sample frame in C, flushes it from cache, writes the framebuffer base address to PL, and commits it. E1.31 receive code is intentionally not in the build yet.
-
-The hot path should stay boring:
+For deployment, copy this file to the FAT partition of the SD card:
 
 ```text
-UDP callback -> validate E1.31 -> map universe slots -> write inactive frame bank -> commit register
+build/sd/BOOT.BIN
 ```
 
-No pixel timing belongs in PS code.
+The boot image contains:
+
+```text
+FSBL
+FPGA bitstream
+bare-metal controller app
+```
+
+## Active Files
+
+```text
+hw/rtl/eth_frame_core.v      AXI-Lite PL frame-ingest core
+hw/scripts/build.tcl         Vivado batch hardware build
+hw/scripts/ps_bd.tcl         Zynq PS + eth_frame_core block design
+hw/constraints/pynq_z2.xdc   PYNQ-Z2 PMOD output constraints
+ps/app/                      Bare-metal controller app
+ps/scripts/create_app_vitis.py
+ps/scripts/package_boot.py
+ps/scripts/run_controller.tcl
+ps/scripts/run_xsdb_checked.py
+Makefile
+```
+
+## PL Register Contract
+
+Base address: `0x43C00000`
+
+| Offset | Name | Access | Purpose |
+| --- | --- | --- | --- |
+| `0x000` | `ID` | RO | Must read `0x4546504c` |
+| `0x004` | `VERSION` | RO | Must read `0x00010000` |
+| `0x008` | `CONTROL` | RW | Bit 1 clears sticky status |
+| `0x00c` | `STATUS` | RO | Bit 0 ready, bit 1 frame overflow |
+| `0x010` | `PIN_OUT` | RW | Low four bits drive `pl_data[3:0]` |
+| `0x014` | `COUNTER` | RO | Free-running PL clock counter |
+| `0x018` | `FRAME_CAPACITY` | RO | PL frame storage capacity in 32-bit words |
+| `0x020` | `FRAME_INDEX` | RW | Indexed frame sink write pointer; write resets word count |
+| `0x024` | `FRAME_WORDS` | RO | Words written since index reset |
+| `0x028` | `FRAME_DATA` | WO/RO | Write frame words into PL storage |
+| `0x02c` | `FRAME_COMMIT` | WO | Latch written word count and increment frame count |
+| `0x030` | `FRAME_COUNT` | RO | Accepted frame commits |
+| `0x034` | `COMMITTED_WORDS` | RO | Word count from last commit |
+| `0x038` | `LAST_FRAME_WORD` | RO | Last word written through `FRAME_DATA` |
+| `0x03c` | `ERROR_COUNT` | RO | Protocol errors detected by PL |
+
+Current frame format is one `0x00RRGGBB` word per pixel. The default capacity is `8192` words, enough for double the current configured frame size of `4 * 1024` pixels.
+
+## Next Integration Boundary
+
+The PS app currently generates deterministic test frames and commits them through the same `pl_ingest_write_frame()` path that Ethernet receive will use. The Ethernet step should add lwIP UDP receive on the PS and map E1.31 slots into the inactive frame returned by `frame_pipeline_inactive_words()`. The PL side should then replace the PMOD pin proof with a deterministic consumer of the committed frame storage.

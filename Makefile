@@ -3,50 +3,45 @@
 PYTHON ?= python
 VIVADO ?= vivado
 VITIS ?= vitis
+BOOTGEN ?= bootgen
 POWERSHELL ?= powershell
 
-.PHONY: help all memmap hw ps run pin-test sim sim-pl-top sim-controller-core clean clean-generated clean-logs
+XSA := build/vivado/donder_controller.xsa
+PS_STAMP := build/vitis/.app-built
+BOOT_BIN := build/sd/BOOT.BIN
+
+.PHONY: help all hw ps boot run clean
 
 help:
 	@echo Common targets:
-	@echo   make memmap      Generate register headers/packages/docs from memory_map.yaml
-	@echo   make hw          Build/export Vivado hardware without root logs or journals
-	@echo   make ps          Build the Vitis bare-metal PS app
-	@echo   make run         Program FPGA, run the bare-metal app, and read PL registers
-	@echo   make pin-test    Program FPGA and drive slow PMOD test waves
-	@echo   make sim         Run RTL testbenches without root log clutter
-	@echo   make all         Run memmap, hw, and ps
-	@echo   make clean       Remove generated Xilinx output and root log clutter
+	@echo   make hw      Build Vivado hardware and export XSA
+	@echo   make ps      Build the bare-metal controller app
+	@echo   make boot    Package deployable SD-card BOOT.BIN
+	@echo   make run     Program FPGA and run the controller app over JTAG
+	@echo   make all     Run hw, ps, and boot
+	@echo   make clean   Remove generated Xilinx output and root log clutter
 
-all: memmap hw ps
+all: hw ps boot
 
-memmap:
-	$(PYTHON) tools/gen_memory_map.py
+hw: $(XSA)
 
-hw:
+$(XSA): hw/rtl/eth_frame_core.v hw/constraints/pynq_z2.xdc hw/scripts/build.tcl hw/scripts/ps_bd.tcl
 	$(VIVADO) -mode batch -nolog -nojournal -source hw/scripts/build.tcl
 
-ps:
+ps: $(PS_STAMP)
+
+$(PS_STAMP): $(XSA) $(wildcard ps/app/*.c) $(wildcard ps/app/*.h) ps/scripts/create_app_vitis.py
 	$(VITIS) -s ps/scripts/create_app_vitis.py
+	$(PYTHON) -c "from pathlib import Path; Path('$(PS_STAMP)').parent.mkdir(parents=True, exist_ok=True); Path('$(PS_STAMP)').touch()"
 
-run:
-	$(VITIS) -s ps/scripts/run_controller.py
+boot: $(BOOT_BIN)
 
-pin-test:
-	$(VITIS) -s ps/scripts/run_controller.py --pin-test
+$(BOOT_BIN): $(PS_STAMP) ps/scripts/package_boot.py
+	$(PYTHON) ps/scripts/package_boot.py --bootgen $(BOOTGEN)
 
-sim: sim-pl-top sim-controller-core
+run: $(PS_STAMP)
+	$(PYTHON) ps/scripts/run_xsdb_checked.py ps/scripts/run_controller.tcl
 
-sim-pl-top:
-	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File tools/run_xsim.ps1 -Top pl_top_tb -Sources "hw/rtl/frame_reader.sv,hw/rtl/ws2811_tx.sv,hw/rtl/output_bank.sv,hw/rtl/pl_top.sv,hw/sim/pl_top_tb.sv"
-
-sim-controller-core:
-	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File tools/run_xsim.ps1 -Top controller_core_bd_tb -Sources "hw/rtl/regs_pkg.sv,hw/rtl/axil_reg_if_rd.v,hw/rtl/axil_reg_if_wr.v,hw/rtl/axil_reg_if.v,hw/rtl/controller_regs.sv,hw/rtl/axi_regs.sv,hw/rtl/frame_reader.sv,hw/rtl/ws2811_tx.sv,hw/rtl/output_bank.sv,hw/rtl/pl_top.sv,hw/rtl/controller_core_bd.v,hw/sim/controller_core_bd_tb.sv"
-
-clean: clean-generated clean-logs
-
-clean-generated:
-	$(POWERSHELL) -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'build','.Xil','xsim.dir','NA'"
-
-clean-logs:
-	$(POWERSHELL) -NoProfile -Command "$$patterns = @('vivado*.log','vivado*.jou','vivado_*.backup.*','xvlog.log','xvlog.pb','xelab.log','xelab.pb','xsim.log','xsim.jou','xsim.pb','xsim_*.backup.log','xsim_*.backup.jou','*.wdb','*.vcd','dfx_runtime.txt'); Get-ChildItem -Force -File | Where-Object { $$name = $$_.Name; $$patterns | Where-Object { $$name -like $$_ } } | Remove-Item -Force"
+clean:
+	$(POWERSHELL) -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'build','.Xil','NA'"
+	$(POWERSHELL) -NoProfile -Command "$$patterns = @('vivado*.log','vivado*.jou','vivado_*.backup.*','*.wdb','*.vcd','dfx_runtime.txt'); Get-ChildItem -Force -File | Where-Object { $$name = $$_.Name; $$patterns | Where-Object { $$name -like $$_ } } | Remove-Item -Force"
