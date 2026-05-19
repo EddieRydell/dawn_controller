@@ -25,7 +25,7 @@ all: hw ps boot
 
 hw: $(XSA)
 
-$(XSA): hw/rtl/eth_frame_core.v hw/constraints/pynq_z2.xdc hw/scripts/build.tcl hw/scripts/ps_bd.tcl
+$(XSA): hw/rtl/eth_control_core.v hw/rtl/axil_frame_ram.v third_party/verilog-axi/rtl/axil_ram.v hw/constraints/pynq_z2.xdc hw/scripts/build.tcl hw/scripts/ps_bd.tcl
 	$(VIVADO) -mode batch -nolog -nojournal -source hw/scripts/build.tcl
 
 ps: $(PS_STAMP)

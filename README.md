@@ -9,7 +9,8 @@ Zynq PS bare-metal app
   -> onboard PS Ethernet path, next integration step
   -> frame assembly in PS memory
   -> M_AXI_GP0 AXI-Lite writes
-  -> eth_frame_core PL frame sink
+  -> eth_control_core control/status
+  -> axil_frame_ram frame window backed by alexforencich/verilog-axi axil_ram
   -> deterministic PL consumer, next integration step
 ```
 
@@ -49,9 +50,11 @@ bare-metal controller app
 ## Active Files
 
 ```text
-hw/rtl/eth_frame_core.v      AXI-Lite PL frame-ingest core
+hw/rtl/eth_control_core.v    AXI-Lite control/status core
+hw/rtl/axil_frame_ram.v      Vivado module wrapper around upstream axil_ram
+third_party/verilog-axi/     MIT-licensed AXI components from alexforencich/verilog-axi
 hw/scripts/build.tcl         Vivado batch hardware build
-hw/scripts/ps_bd.tcl         Zynq PS + eth_frame_core block design
+hw/scripts/ps_bd.tcl         Zynq PS + control/frame-RAM block design
 hw/constraints/pynq_z2.xdc   PYNQ-Z2 PMOD output constraints
 ps/app/                      Bare-metal controller app
 ps/scripts/create_app_vitis.py
@@ -61,29 +64,30 @@ ps/scripts/run_xsdb_checked.py
 Makefile
 ```
 
-## PL Register Contract
+## PL Address Map
 
-Base address: `0x43C00000`
+| Region | Base | Size | Purpose |
+| --- | --- | --- | --- |
+| Control | `0x43C00000` | 4 KiB | Identity, status, counters, commit |
+| Frame RAM | `0x43C10000` | 32 KiB | 8192 32-bit frame words |
 
 | Offset | Name | Access | Purpose |
 | --- | --- | --- | --- |
 | `0x000` | `ID` | RO | Must read `0x4546504c` |
-| `0x004` | `VERSION` | RO | Must read `0x00010000` |
+| `0x004` | `VERSION` | RO | Must read `0x00020000` |
 | `0x008` | `CONTROL` | RW | Bit 1 clears sticky status |
 | `0x00c` | `STATUS` | RO | Bit 0 ready, bit 1 frame overflow |
 | `0x010` | `PIN_OUT` | RW | Low four bits drive `pl_data[3:0]` |
 | `0x014` | `COUNTER` | RO | Free-running PL clock counter |
 | `0x018` | `FRAME_CAPACITY` | RO | PL frame storage capacity in 32-bit words |
-| `0x020` | `FRAME_INDEX` | RW | Indexed frame sink write pointer; write resets word count |
-| `0x024` | `FRAME_WORDS` | RO | Words written since index reset |
-| `0x028` | `FRAME_DATA` | WO/RO | Write frame words into PL storage |
-| `0x02c` | `FRAME_COMMIT` | WO | Latch written word count and increment frame count |
-| `0x030` | `FRAME_COUNT` | RO | Accepted frame commits |
-| `0x034` | `COMMITTED_WORDS` | RO | Word count from last commit |
-| `0x038` | `LAST_FRAME_WORD` | RO | Last word written through `FRAME_DATA` |
-| `0x03c` | `ERROR_COUNT` | RO | Protocol errors detected by PL |
+| `0x020` | `FRAME_COMMIT` | WO | Write committed word count |
+| `0x024` | `FRAME_COUNT` | RO | Accepted frame commits |
+| `0x028` | `COMMITTED_WORDS` | RO | Word count from last commit |
+| `0x02c` | `FIRST_FRAME_WORD` | RW | First word metadata for commit proof |
+| `0x030` | `LAST_FRAME_WORD` | RW | Last word metadata for commit proof |
+| `0x034` | `ERROR_COUNT` | RO | Protocol errors detected by PL |
 
-Current frame format is one `0x00RRGGBB` word per pixel. The default capacity is `8192` words, enough for double the current configured frame size of `4 * 1024` pixels.
+Current frame format is one `0x00RRGGBB` word per pixel. The frame RAM capacity is `8192` words, enough for double the current configured frame size of `4 * 1024` pixels.
 
 ## Next Integration Boundary
 

@@ -16,7 +16,11 @@ if {[llength [get_board_parts -quiet $pynq_z2_board_part]] > 0} {
   error "Required board part $pynq_z2_board_part not found. Install the PYNQ-Z2 board files before building."
 }
 
-add_files -fileset sources_1 [file join $repo_root hw rtl eth_frame_core.v]
+add_files -fileset sources_1 [list \
+  [file join $repo_root third_party verilog-axi rtl axil_ram.v] \
+  [file join $repo_root hw rtl eth_control_core.v] \
+  [file join $repo_root hw rtl axil_frame_ram.v] \
+]
 add_files -fileset constrs_1 [file join $repo_root hw constraints pynq_z2.xdc]
 update_compile_order -fileset sources_1
 

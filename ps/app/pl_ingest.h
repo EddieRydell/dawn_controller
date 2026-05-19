@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define PL_CORE_ID 0x4546504cu
-#define PL_CORE_VERSION 0x00010000u
+#define PL_CORE_VERSION 0x00020000u
 
 typedef enum {
     PL_INGEST_OK = 0,

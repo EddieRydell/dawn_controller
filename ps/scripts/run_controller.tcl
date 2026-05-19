@@ -2,7 +2,8 @@ set repo_root [file normalize [file join [file dirname [info script]] .. ..]]
 set hw_server_url "TCP:localhost:3121"
 set bit_file [file join $repo_root build vivado donder_controller.runs impl_1 donder_system_wrapper.bit]
 set vitis_workspace [file join $repo_root build vitis]
-set pl_base 0x43C00000
+set pl_control_base 0x43C00000
+set pl_frame_base 0x43C10000
 
 set slcr_unlock 0xF8000008
 set slcr_lock 0xF8000004
@@ -92,11 +93,12 @@ configparams force-mem-accesses 1
 post_config_pl
 
 puts "PL_PROBE"
-set core_id [print_reg $pl_base 0x000 CORE_ID]
-print_reg $pl_base 0x004 SCRATCH
-print_reg $pl_base 0x008 PIN_OUT
-print_reg $pl_base 0x00c COUNTER
-print_reg $pl_base 0x02c STATUS
+set core_id [print_reg $pl_control_base 0x000 CORE_ID]
+print_reg $pl_control_base 0x004 VERSION
+print_reg $pl_control_base 0x00c STATUS
+print_reg $pl_control_base 0x010 PIN_OUT
+print_reg $pl_control_base 0x018 FRAME_CAPACITY
+print_reg $pl_frame_base 0x000 FRAME_WORD0
 if {$core_id != 0x4546504c} {
     error [format "Unexpected PL core ID: 0x%08x" $core_id]
 }
@@ -109,12 +111,13 @@ con
 
 after 5000
 puts "PL_AFTER_APP"
-print_reg $pl_base 0x004 SCRATCH
-print_reg $pl_base 0x008 PIN_OUT
-print_reg $pl_base 0x014 FRAME_WORDS
-print_reg $pl_base 0x020 FRAME_COUNT
-print_reg $pl_base 0x024 COMMITTED_WORDS
-print_reg $pl_base 0x028 LAST_FRAME_WORD
-print_reg $pl_base 0x02c STATUS
+print_reg $pl_control_base 0x010 PIN_OUT
+print_reg $pl_control_base 0x024 FRAME_COUNT
+print_reg $pl_control_base 0x028 COMMITTED_WORDS
+print_reg $pl_control_base 0x02c FIRST_FRAME_WORD
+print_reg $pl_control_base 0x030 LAST_FRAME_WORD
+print_reg $pl_control_base 0x034 ERROR_COUNT
+print_reg $pl_control_base 0x00c STATUS
+print_reg $pl_frame_base 0x000 FRAME_WORD0
 
 disconnect
