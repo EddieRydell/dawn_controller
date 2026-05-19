@@ -26,8 +26,16 @@ create_bd_cell -type module -reference axil_frame_ram axil_frame_ram_0
 connect_bd_net [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins axil_frame_ram_0/aclk]
 connect_bd_net [get_bd_pins proc_sys_reset_0/peripheral_aresetn] [get_bd_pins axil_frame_ram_0/aresetn]
 
-create_bd_port -dir O -from 3 -to 0 pl_data
-connect_bd_net [get_bd_pins eth_control_core_0/pl_data] [get_bd_ports pl_data]
+create_bd_port -dir O -from 3 -to 0 ws281x_data
+connect_bd_net [get_bd_pins eth_control_core_0/ws281x_data] [get_bd_ports ws281x_data]
+
+connect_bd_net [get_bd_pins eth_control_core_0/m_frame_araddr] [get_bd_pins axil_frame_ram_0/rd_araddr]
+connect_bd_net [get_bd_pins eth_control_core_0/m_frame_arvalid] [get_bd_pins axil_frame_ram_0/rd_arvalid]
+connect_bd_net [get_bd_pins eth_control_core_0/m_frame_arready] [get_bd_pins axil_frame_ram_0/rd_arready]
+connect_bd_net [get_bd_pins eth_control_core_0/m_frame_rdata] [get_bd_pins axil_frame_ram_0/rd_rdata]
+connect_bd_net [get_bd_pins eth_control_core_0/m_frame_rresp] [get_bd_pins axil_frame_ram_0/rd_rresp]
+connect_bd_net [get_bd_pins eth_control_core_0/m_frame_rvalid] [get_bd_pins axil_frame_ram_0/rd_rvalid]
+connect_bd_net [get_bd_pins eth_control_core_0/m_frame_rready] [get_bd_pins axil_frame_ram_0/rd_rready]
 
 apply_bd_automation -rule xilinx.com:bd_rule:axi4 \
   -config {Master "/processing_system7_0/M_AXI_GP0" Slave "/eth_control_core_0/S_AXI" Clk "/processing_system7_0/FCLK_CLK0"} \

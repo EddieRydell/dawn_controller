@@ -4,8 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define PL_CORE_ID 0x4546504cu
-#define PL_CORE_VERSION 0x00020001u
+#include "pl_contract.h"
 
 typedef enum {
     PL_INGEST_OK = 0,
@@ -14,6 +13,10 @@ typedef enum {
     PL_INGEST_BAD_STATUS = -3,
     PL_INGEST_CAPACITY_TOO_SMALL = -4,
     PL_INGEST_READBACK_FAILED = -5,
+    PL_INGEST_BAD_PLATFORM = -6,
+    PL_INGEST_COMMIT_FAILED = -7,
+    PL_INGEST_CONSUMER_FAILED = -8,
+    PL_INGEST_BAD_ARGUMENT = -9,
 } pl_ingest_result_t;
 
 typedef struct {
@@ -28,6 +31,10 @@ typedef struct {
     uint32_t frame_count;
     uint32_t committed_words;
     uint32_t error_count;
+    uint32_t consumer_status;
+    uint32_t consumer_sequence;
+    uint32_t consumer_frame_count;
+    uint32_t consumer_error_count;
 } pl_ingest_snapshot_t;
 
 uint32_t pl_ingest_read(uint32_t offset);
@@ -36,6 +43,7 @@ void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot);
 pl_ingest_result_t pl_ingest_init(uint32_t required_words);
 pl_ingest_result_t pl_ingest_self_test(void);
 pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_count);
+pl_ingest_result_t pl_ingest_enable_consumer(void);
 void pl_ingest_drive_pins(uint32_t value);
 
 #endif

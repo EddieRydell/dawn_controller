@@ -28,7 +28,7 @@ void frame_pipeline_generate_test_pattern(uint32_t frame_number)
 
     for (uint32_t output = 0u; output < DONDER_OUTPUT_COUNT; ++output) {
         for (uint32_t pixel = 0u; pixel < DONDER_PIXELS_PER_OUTPUT; ++pixel) {
-            uint32_t index = (output * DONDER_PIXELS_PER_OUTPUT) + pixel;
+            uint32_t index = (pixel * DONDER_OUTPUT_COUNT) + output;
             uint32_t phase = (pixel + frame_number + (output * 64u)) & 0xffu;
             uint32_t r = phase;
             uint32_t g = 255u - phase;

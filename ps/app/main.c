@@ -10,9 +10,6 @@ static void fatal(const char *message, int code)
 {
     xil_printf("FATAL %s code=%d\r\n", message, code);
     while (1) {
-        pl_ingest_drive_pins(0x0fu);
-        usleep(100000u);
-        pl_ingest_drive_pins(0x00u);
         usleep(100000u);
     }
 }
@@ -40,6 +37,16 @@ int main(void)
     }
 
     frame_pipeline_init();
+    frame_pipeline_generate_test_pattern(frame_number);
+    if (frame_pipeline_commit() != 0) {
+        fatal("initial_frame_commit", -1);
+    }
+    frame_number++;
+
+    pl_ingest_result_t consumer_result = pl_ingest_enable_consumer();
+    if (consumer_result != PL_INGEST_OK) {
+        fatal("pl_enable_consumer", consumer_result);
+    }
     xil_printf("foundation ready\r\n");
 
     while (1) {
@@ -48,7 +55,6 @@ int main(void)
             fatal("frame_commit", -1);
         }
 
-        pl_ingest_drive_pins(1u << (frame_number & 3u));
         frame_number++;
         usleep(25000u);
     }

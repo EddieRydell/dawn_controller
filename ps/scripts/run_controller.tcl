@@ -132,6 +132,14 @@ set bank_words [print_reg $pl_control_base 0x038 FRAME_BANK_WORDS]
 set active_bank [print_reg $pl_control_base 0x03c ACTIVE_BANK]
 print_reg $pl_control_base 0x040 WRITE_BANK
 print_reg $pl_control_base 0x044 FRAME_SEQUENCE
+print_reg $pl_control_base 0x04c CONSUMER_STATUS
+print_reg $pl_control_base 0x050 CONSUMER_SEQUENCE
+print_reg $pl_control_base 0x054 CONSUMER_FRAME_COUNT
+print_reg $pl_control_base 0x058 CONSUMER_ERROR_COUNT
+print_reg $pl_control_base 0x05c WS281X_BIT_RATE
+print_reg $pl_control_base 0x060 WS281X_OUTPUT_COUNT
+print_reg $pl_control_base 0x064 WS281X_PIXELS_PER_OUTPUT
+print_reg $pl_control_base 0x068 CONSUMER_DEBUG
 print_reg $pl_control_base 0x00c STATUS
 print_frame_word $pl_frame_base $bank_words $active_bank 0 ACTIVE_FRAME_WORD0
 

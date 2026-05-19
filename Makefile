@@ -2,6 +2,9 @@
 
 PYTHON ?= python
 VIVADO ?= vivado
+XVLOG ?= xvlog
+XELAB ?= xelab
+XSIM ?= xsim
 VITIS ?= vitis
 BOOTGEN ?= bootgen
 POWERSHELL ?= powershell
@@ -10,11 +13,13 @@ XSA := build/vivado/donder_controller.xsa
 PS_STAMP := build/vitis/.app-built
 BOOT_BIN := build/sd/BOOT.BIN
 
-.PHONY: help all hw ps boot run clean
+.PHONY: help all rtl-check rtl-sim hw ps boot run clean
 
 help:
 	@echo Common targets:
 	@echo   make hw      Build Vivado hardware and export XSA
+	@echo   make rtl-check  Run fast Vivado Verilog syntax checks
+	@echo   make rtl-sim  Run focused WS281x consumer RTL simulation
 	@echo   make ps      Build the bare-metal controller app
 	@echo   make boot    Package deployable SD-card BOOT.BIN
 	@echo   make run     Program FPGA and run the controller app over JTAG
@@ -23,16 +28,25 @@ help:
 
 all: hw ps boot
 
+rtl-check: hw/rtl/pl_contract.vh
+	$(XVLOG) -sv hw/rtl/eth_control_core.v hw/rtl/axil_frame_ram.v
+
+rtl-sim: hw/rtl/pl_contract.vh
+	$(XVLOG) -sv hw/rtl/eth_control_core.v hw/rtl/axil_frame_ram.v hw/sim/tb_ws281x_consumer.v
+	$(XELAB) tb_ws281x_consumer -s tb_ws281x_consumer_sim
+	$(XSIM) tb_ws281x_consumer_sim -runall
+	$(POWERSHELL) -NoProfile -Command "$$log = Get-Content -Raw 'xsim.log'; if ($$log -notmatch 'WS281x consumer simulation passed' -or $$log -match 'Fatal:') { throw 'RTL simulation failed' }"
+
 hw: $(XSA)
 
-$(XSA): hw/rtl/eth_control_core.v hw/rtl/axil_frame_ram.v third_party/verilog-axi/rtl/axil_ram.v hw/constraints/pynq_z2.xdc hw/scripts/build.tcl hw/scripts/ps_bd.tcl
+$(XSA): hw/rtl/pl_contract.vh hw/rtl/eth_control_core.v hw/rtl/axil_frame_ram.v hw/constraints/pynq_z2.xdc hw/scripts/build.tcl hw/scripts/ps_bd.tcl
 	$(VIVADO) -mode batch -nolog -nojournal -source hw/scripts/build.tcl
 
 ps: $(PS_STAMP)
 
 $(PS_STAMP): $(XSA) $(wildcard ps/app/*.c) $(wildcard ps/app/*.h) ps/scripts/create_app_vitis.py Makefile
 	$(VITIS) -s ps/scripts/create_app_vitis.py
-	$(PYTHON) -c "from pathlib import Path; import sys; root=Path('build/vitis'); apps=list(root.glob('*/donder_controller/build/donder_controller.elf')); fsbl=list(root.glob('*/donder_platform/zynq_fsbl/build/fsbl.elf')); assert apps and fsbl, 'missing Vitis ELF output'; Path('$(PS_STAMP)').parent.mkdir(parents=True, exist_ok=True); Path('$(PS_STAMP)').touch()"
+	$(PYTHON) -c "from pathlib import Path; root=Path('build/vitis'); workspaces=[p for p in root.iterdir() if p.is_dir()]; latest=max(workspaces, key=lambda p: p.stat().st_mtime); assert (latest/'donder_controller/build/donder_controller.elf').exists(), f'missing app ELF in {latest}'; assert (latest/'donder_platform/zynq_fsbl/build/fsbl.elf').exists(), f'missing FSBL ELF in {latest}'; Path('$(PS_STAMP)').parent.mkdir(parents=True, exist_ok=True); Path('$(PS_STAMP)').touch()"
 
 boot: $(BOOT_BIN)
 

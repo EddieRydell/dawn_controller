@@ -17,10 +17,11 @@ if {[llength [get_board_parts -quiet $pynq_z2_board_part]] > 0} {
 }
 
 add_files -fileset sources_1 [list \
-  [file join $repo_root third_party verilog-axi rtl axil_ram.v] \
+  [file join $repo_root hw rtl pl_contract.vh] \
   [file join $repo_root hw rtl eth_control_core.v] \
   [file join $repo_root hw rtl axil_frame_ram.v] \
 ]
+set_property file_type {Verilog Header} [get_files [file join $repo_root hw rtl pl_contract.vh]]
 add_files -fileset constrs_1 [file join $repo_root hw constraints pynq_z2.xdc]
 update_compile_order -fileset sources_1
 
