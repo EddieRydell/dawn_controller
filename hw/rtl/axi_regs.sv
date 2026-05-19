@@ -42,6 +42,8 @@ module axi_regs #(
     output logic [MAX_OUTPUTS*32-1:0] output_pixel_count_o,
     output logic [MAX_OUTPUTS*32-1:0] output_buffer_offset_o,
     output logic [MAX_OUTPUTS*32-1:0] output_flags_o,
+    input  logic                   frame_done_pulse_i,
+    output logic                   irq_o,
 
     input  logic [31:0]            debug_reader_state_i,
     input  logic [31:0]            debug_reader_output_index_i,
@@ -126,6 +128,8 @@ module axi_regs #(
         .output_pixel_count_o(output_pixel_count_o),
         .output_buffer_offset_o(output_buffer_offset_o),
         .output_flags_o(output_flags_o),
+        .frame_done_pulse_i(frame_done_pulse_i),
+        .irq_o(irq_o),
         .debug_reader_state_i(debug_reader_state_i),
         .debug_reader_output_index_i(debug_reader_output_index_i),
         .debug_reader_pixel_index_i(debug_reader_pixel_index_i),

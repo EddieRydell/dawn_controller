@@ -31,6 +31,18 @@
 
 #define PL_REG_FRAME_BASE_ADDR                0x028u
 
+#define PL_REG_IRQ_ENABLE                     0x02cu
+#define PL_IRQ_FRAME_DONE                      (1u << 0)
+#define PL_IRQ_UNDERRUN                        (1u << 1)
+#define PL_IRQ_CONFIG_ERROR                    (1u << 2)
+#define PL_IRQ_LATE_COMMIT                     (1u << 3)
+
+#define PL_REG_IRQ_STATUS                     0x030u
+#define PL_IRQ_STATUS_FRAME_DONE               (1u << 0)
+#define PL_IRQ_STATUS_UNDERRUN                 (1u << 1)
+#define PL_IRQ_STATUS_CONFIG_ERROR             (1u << 2)
+#define PL_IRQ_STATUS_LATE_COMMIT              (1u << 3)
+
 #define PL_REG_OUTPUT_PIXEL_COUNT             0x100u
 #define PL_REG_OUTPUT_PIXEL_COUNT_STRIDE                        0x010u
 

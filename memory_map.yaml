@@ -66,6 +66,40 @@ registers:
     offset: 0x028
     access: rw
     description: Physical base address of frame bank 0 in PS DDR.
+  - name: IRQ_ENABLE
+    offset: 0x02c
+    access: rw
+    description: Interrupt enable mask.
+    fields:
+      - name: IRQ_FRAME_DONE
+        bit: 0
+        description: Enable interrupt when a committed frame finishes.
+      - name: IRQ_UNDERRUN
+        bit: 1
+        description: Enable interrupt on WS transmitter underrun.
+      - name: IRQ_CONFIG_ERROR
+        bit: 2
+        description: Enable interrupt on runtime configuration error.
+      - name: IRQ_LATE_COMMIT
+        bit: 3
+        description: Enable interrupt when a frame commit is rejected.
+  - name: IRQ_STATUS
+    offset: 0x030
+    access: rw
+    description: Sticky interrupt status. Write one to a bit to clear it.
+    fields:
+      - name: IRQ_STATUS_FRAME_DONE
+        bit: 0
+        description: A committed frame finished.
+      - name: IRQ_STATUS_UNDERRUN
+        bit: 1
+        description: WS transmitter underrun occurred.
+      - name: IRQ_STATUS_CONFIG_ERROR
+        bit: 2
+        description: Runtime configuration error occurred.
+      - name: IRQ_STATUS_LATE_COMMIT
+        bit: 3
+        description: A frame commit was rejected.
   - name: OUTPUT_PIXEL_COUNT
     offset: 0x100
     stride: 0x010

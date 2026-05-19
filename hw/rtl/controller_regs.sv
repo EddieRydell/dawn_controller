@@ -27,6 +27,8 @@ module controller_regs #(
     output logic [MAX_OUTPUTS*32-1:0] output_pixel_count_o,
     output logic [MAX_OUTPUTS*32-1:0] output_buffer_offset_o,
     output logic [MAX_OUTPUTS*32-1:0] output_flags_o,
+    input  logic                   frame_done_pulse_i,
+    output logic                   irq_o,
 
     input  logic [31:0]            debug_reader_state_i,
     input  logic [31:0]            debug_reader_output_index_i,
@@ -51,8 +53,13 @@ module controller_regs #(
     logic [31:0] late_commit_counter_reg;
     logic [31:0] output_count_reg;
     logic [31:0] frame_base_addr_reg;
+    logic [31:0] irq_enable_reg;
+    logic [31:0] irq_status_reg;
     logic commit_frame_pulse;
     logic commit_ready;
+    logic late_commit_event;
+    logic [31:0] irq_set_bits;
+    logic [31:0] irq_clear_bits;
 
     logic [31:0] output_pixel_count [MAX_OUTPUTS];
     logic [31:0] output_buffer_offset [MAX_OUTPUTS];
@@ -93,6 +100,8 @@ module controller_regs #(
             PL_REG_OUTPUT_COUNT: value = output_count_reg;
             PL_REG_MAX_PIXELS_PER_OUTPUT: value = MAX_PIXELS_PER_OUTPUT;
             PL_REG_FRAME_BASE_ADDR: value = frame_base_addr_reg;
+            PL_REG_IRQ_ENABLE: value = irq_enable_reg;
+            PL_REG_IRQ_STATUS: value = irq_status_reg;
             12'h300: value = debug_reader_state_i;
             12'h304: value = debug_reader_output_index_i;
             12'h308: value = debug_reader_pixel_index_i;
@@ -130,6 +139,17 @@ module controller_regs #(
     assign commit_ready = ((control_reg & PL_ENABLE) != 32'h0)
         && ((status_i & (PL_BUSY | PL_FRAME_PENDING)) == 32'h0)
         && ((status_reg & PL_CONFIG_ERROR) == 32'h0);
+    assign late_commit_event = reg_wr_en
+        && (reg_wr_addr == PL_REG_CONTROL)
+        && ((apply_wstrb(control_reg, reg_wr_data, reg_wr_strb) & PL_COMMIT_FRAME) != 32'h0)
+        && !commit_ready;
+    assign irq_set_bits = (frame_done_pulse_i ? PL_IRQ_STATUS_FRAME_DONE : 32'h0000_0000)
+        | ((status_i & PL_UNDERRUN) ? PL_IRQ_STATUS_UNDERRUN : 32'h0000_0000)
+        | ((status_i & PL_CONFIG_ERROR) ? PL_IRQ_STATUS_CONFIG_ERROR : 32'h0000_0000)
+        | (late_commit_event ? PL_IRQ_STATUS_LATE_COMMIT : 32'h0000_0000);
+    assign irq_clear_bits = (reg_wr_en && (reg_wr_addr == PL_REG_IRQ_STATUS))
+        ? apply_wstrb(32'h0000_0000, reg_wr_data, reg_wr_strb)
+        : 32'h0000_0000;
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin
@@ -142,6 +162,8 @@ module controller_regs #(
             late_commit_counter_reg <= 32'h0000_0000;
             output_count_reg <= 32'h0000_0000;
             frame_base_addr_reg <= 32'h0000_0000;
+            irq_enable_reg <= 32'h0000_0000;
+            irq_status_reg <= 32'h0000_0000;
             commit_frame_pulse <= 1'b0;
 
             for (int i = 0; i < MAX_OUTPUTS; i++) begin
@@ -153,6 +175,7 @@ module controller_regs #(
             status_reg <= (status_i & (PL_BUSY | PL_FRAME_PENDING))
                 | (commit_ready ? PL_READY_FOR_FRAME : 32'h0000_0000)
                 | ((status_reg | status_i) & (PL_UNDERRUN | PL_CONFIG_ERROR));
+            irq_status_reg <= (irq_status_reg | irq_set_bits) & ~irq_clear_bits;
             commit_frame_pulse <= 1'b0;
 
             if (reg_wr_en) begin
@@ -181,6 +204,9 @@ module controller_regs #(
                 PL_REG_FRAME_BASE_ADDR: begin
                     frame_base_addr_reg <= apply_wstrb(frame_base_addr_reg, reg_wr_data, reg_wr_strb);
                 end
+                PL_REG_IRQ_ENABLE: begin
+                    irq_enable_reg <= apply_wstrb(irq_enable_reg, reg_wr_data, reg_wr_strb);
+                end
                 default: begin
                     for (int i = 0; i < MAX_OUTPUTS; i++) begin
                         if (reg_wr_addr == PL_REG_OUTPUT_BASE + (i * PL_REG_OUTPUT_STRIDE)) begin
@@ -203,6 +229,7 @@ module controller_regs #(
     assign write_bank_o = write_bank_reg;
     assign frame_base_addr_o = frame_base_addr_reg;
     assign output_count_o = output_count_reg;
+    assign irq_o = ((irq_status_reg & irq_enable_reg) != 32'h0000_0000);
 
     for (genvar output_index = 0; output_index < MAX_OUTPUTS; output_index++) begin : gen_config_outputs
         assign output_pixel_count_o[output_index*32 +: 32] = output_pixel_count[output_index];

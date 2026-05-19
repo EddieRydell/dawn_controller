@@ -72,6 +72,26 @@ uint32_t pl_ready_for_frame(void)
     return (pl_get_status() & PL_READY_FOR_FRAME) != 0u;
 }
 
+void pl_irq_enable(uint32_t mask)
+{
+    pl_write(PL_REG_IRQ_ENABLE, mask);
+}
+
+void pl_irq_disable(void)
+{
+    pl_write(PL_REG_IRQ_ENABLE, 0u);
+}
+
+uint32_t pl_irq_get_status(void)
+{
+    return pl_read(PL_REG_IRQ_STATUS);
+}
+
+void pl_irq_ack(uint32_t mask)
+{
+    pl_write(PL_REG_IRQ_STATUS, mask);
+}
+
 void pl_set_write_bank(uint32_t bank)
 {
     pl_write(PL_REG_WRITE_BANK, bank);

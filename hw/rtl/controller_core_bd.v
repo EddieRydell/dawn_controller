@@ -101,7 +101,9 @@ module controller_core_bd #(
     (* X_INTERFACE_INFO = "xilinx.com:interface:aximm:1.0 M_AXI RREADY" *)
     output wire                         m_axi_rready,
 
-    output wire [MAX_OUTPUTS-1:0]       ws2811_data
+    output wire [MAX_OUTPUTS-1:0]       ws2811_data,
+    (* X_INTERFACE_INFO = "xilinx.com:signal:interrupt:1.0 irq INTERRUPT", X_INTERFACE_PARAMETER = "SENSITIVITY LEVEL_HIGH" *)
+    output wire                         irq
 );
 
     wire [31:0] control;
@@ -196,6 +198,8 @@ module controller_core_bd #(
         .output_pixel_count_o(output_pixel_count_flat),
         .output_buffer_offset_o(output_buffer_offset_flat),
         .output_flags_o(output_flags_flat),
+        .frame_done_pulse_i(frame_done_pulse),
+        .irq_o(irq),
         .debug_reader_state_i(debug_reader_state),
         .debug_reader_output_index_i(debug_reader_output_index),
         .debug_reader_pixel_index_i(debug_reader_pixel_index),

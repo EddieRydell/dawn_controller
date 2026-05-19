@@ -18,6 +18,8 @@ PS/PL register and frame-buffer contract for the Donder controller.
 | `0x020` | `OUTPUT_COUNT` | RW | Active WS2811 output lane count. |
 | `0x024` | `MAX_PIXELS_PER_OUTPUT` | RO | Synthesis-time maximum pixels per output. |
 | `0x028` | `FRAME_BASE_ADDR` | RW | Physical base address of frame bank 0 in PS DDR. |
+| `0x02c` | `IRQ_ENABLE` | RW | Interrupt enable mask. |
+| `0x030` | `IRQ_STATUS` | RW | Sticky interrupt status. Write one to a bit to clear it. |
 | `0x100 + n*0x010` | `OUTPUT_PIXEL_COUNT` | RW | Runtime pixel count for output n. |
 | `0x104 + n*0x010` | `OUTPUT_BUFFER_OFFSET` | RW | Byte offset for output n within each frame bank. |
 | `0x108 + n*0x010` | `OUTPUT_FLAGS` | RW | Runtime flags for output n. |
@@ -33,6 +35,14 @@ PS/PL register and frame-buffer contract for the Donder controller.
 | `STATUS` | `UNDERRUN` | `2` | WS transmitter ran out of pixel data during an active frame. |
 | `STATUS` | `CONFIG_ERROR` | `3` | Runtime config exceeds synthesis limits or is internally inconsistent. |
 | `STATUS` | `READY_FOR_FRAME` | `4` | PL is enabled and ready to accept a new frame commit. |
+| `IRQ_ENABLE` | `IRQ_FRAME_DONE` | `0` | Enable interrupt when a committed frame finishes. |
+| `IRQ_ENABLE` | `IRQ_UNDERRUN` | `1` | Enable interrupt on WS transmitter underrun. |
+| `IRQ_ENABLE` | `IRQ_CONFIG_ERROR` | `2` | Enable interrupt on runtime configuration error. |
+| `IRQ_ENABLE` | `IRQ_LATE_COMMIT` | `3` | Enable interrupt when a frame commit is rejected. |
+| `IRQ_STATUS` | `IRQ_STATUS_FRAME_DONE` | `0` | A committed frame finished. |
+| `IRQ_STATUS` | `IRQ_STATUS_UNDERRUN` | `1` | WS transmitter underrun occurred. |
+| `IRQ_STATUS` | `IRQ_STATUS_CONFIG_ERROR` | `2` | Runtime configuration error occurred. |
+| `IRQ_STATUS` | `IRQ_STATUS_LATE_COMMIT` | `3` | A frame commit was rejected. |
 | `OUTPUT_FLAGS` | `OUTPUT_ENABLE` | `0` | Enable this output. |
 | `OUTPUT_FLAGS` | `OUTPUT_REVERSED` | `1` | Transmit pixels in reverse order. |
 | `OUTPUT_FLAGS` | `OUTPUT_COLOR_ORDER_LSB` | `9:8` | Color order enum field, bits 9:8. |

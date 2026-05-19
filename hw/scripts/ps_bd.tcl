@@ -9,6 +9,8 @@ apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 \
 set_property -dict [list \
   CONFIG.PCW_USE_M_AXI_GP0 {1} \
   CONFIG.PCW_USE_S_AXI_HP0 {1} \
+  CONFIG.PCW_USE_FABRIC_INTERRUPT {1} \
+  CONFIG.PCW_IRQ_F2P_INTR {1} \
   CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {100.0} \
   CONFIG.PCW_PRESET_BANK1_VOLTAGE {LVCMOS 1.8V} \
   CONFIG.PCW_UART1_PERIPHERAL_ENABLE {1} \
@@ -24,6 +26,7 @@ create_bd_cell -type module -reference controller_core_bd controller_core_0
 set_property -dict [list CONFIG.MAX_OUTPUTS {4}] [get_bd_cells controller_core_0]
 connect_bd_net [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins controller_core_0/aclk]
 connect_bd_net [get_bd_pins proc_sys_reset_0/peripheral_aresetn] [get_bd_pins controller_core_0/aresetn]
+connect_bd_net [get_bd_pins controller_core_0/irq] [get_bd_pins processing_system7_0/IRQ_F2P]
 
 create_bd_port -dir O -from 3 -to 0 ws2811_data
 connect_bd_net [get_bd_pins controller_core_0/ws2811_data] [get_bd_ports ws2811_data]

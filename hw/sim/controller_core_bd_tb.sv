@@ -24,6 +24,8 @@ module controller_core_bd_tb;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_OUTPUT_COUNT = 12'h020;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_MAX_PIXELS_PER_OUTPUT = 12'h024;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_FRAME_BASE_ADDR = 12'h028;
+    localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_IRQ_ENABLE = 12'h02c;
+    localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_IRQ_STATUS = 12'h030;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_OUTPUT0_PIXEL_COUNT = 12'h100;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_OUTPUT0_BUFFER_OFFSET = 12'h104;
     localparam logic [AXIL_ADDR_WIDTH-1:0] PL_REG_OUTPUT0_FLAGS = 12'h108;
@@ -86,6 +88,7 @@ module controller_core_bd_tb;
     logic m_axi_rready;
 
     logic [MAX_OUTPUTS-1:0] ws2811_data;
+    logic irq;
 
     axi_mode_t axi_mode = AXI_MODE_NORMAL;
     int unsigned ar_ready_delay = 0;
@@ -156,7 +159,8 @@ module controller_core_bd_tb;
         .m_axi_rlast(m_axi_rlast),
         .m_axi_rvalid(m_axi_rvalid),
         .m_axi_rready(m_axi_rready),
-        .ws2811_data(ws2811_data)
+        .ws2811_data(ws2811_data),
+        .irq(irq)
     );
 
     task automatic init_pixels;
@@ -386,12 +390,28 @@ module controller_core_bd_tb;
 
         reset_dut();
         program_one_output(1'b1);
+        axil_write(PL_REG_IRQ_ENABLE, 32'h0000_0001);
+        if (irq) begin
+            $fatal(1, "frame_done_irq: irq asserted before frame completion");
+        end
         axil_read(PL_REG_MAX_PIXELS_PER_OUTPUT, read_value);
         if (read_value != MAX_PIXELS_PER_OUTPUT) begin
             $fatal(1, "bad MAX_PIXELS_PER_OUTPUT readback: 0x%08x", read_value);
         end
         commit_frame();
         expect_completed_frame("happy_path", 4, 1);
+        if (!irq) begin
+            $fatal(1, "frame_done_irq: irq did not assert after frame completion");
+        end
+        axil_read(PL_REG_IRQ_STATUS, read_value);
+        if ((read_value & 32'h0000_0001) == 32'h0) begin
+            $fatal(1, "frame_done_irq: missing frame-done IRQ status: 0x%08x", read_value);
+        end
+        axil_write(PL_REG_IRQ_STATUS, 32'h0000_0001);
+        repeat (2) @(posedge aclk);
+        if (irq) begin
+            $fatal(1, "frame_done_irq: irq did not clear");
+        end
 
         reset_dut();
         ar_ready_delay <= 3;

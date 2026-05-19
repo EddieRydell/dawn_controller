@@ -30,6 +30,18 @@ package regs_pkg;
 
     localparam int unsigned PL_REG_FRAME_BASE_ADDR = 32'h028;
 
+    localparam int unsigned PL_REG_IRQ_ENABLE = 32'h02c;
+    localparam logic [31:0] PL_IRQ_FRAME_DONE = 32'h00000001;
+    localparam logic [31:0] PL_IRQ_UNDERRUN = 32'h00000002;
+    localparam logic [31:0] PL_IRQ_CONFIG_ERROR = 32'h00000004;
+    localparam logic [31:0] PL_IRQ_LATE_COMMIT = 32'h00000008;
+
+    localparam int unsigned PL_REG_IRQ_STATUS = 32'h030;
+    localparam logic [31:0] PL_IRQ_STATUS_FRAME_DONE = 32'h00000001;
+    localparam logic [31:0] PL_IRQ_STATUS_UNDERRUN = 32'h00000002;
+    localparam logic [31:0] PL_IRQ_STATUS_CONFIG_ERROR = 32'h00000004;
+    localparam logic [31:0] PL_IRQ_STATUS_LATE_COMMIT = 32'h00000008;
+
     localparam int unsigned PL_REG_OUTPUT_PIXEL_COUNT = 32'h100;
     localparam int unsigned PL_REG_OUTPUT_PIXEL_COUNT_STRIDE = 32'h010;
 

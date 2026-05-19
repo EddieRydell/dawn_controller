@@ -117,6 +117,8 @@ def print_pl_registers(session):
         (0x020, "OUTPUT_COUNT"),
         (0x024, "MAX_PIXELS_PER_OUTPUT"),
         (0x028, "FRAME_BASE_ADDR"),
+        (0x02C, "IRQ_ENABLE"),
+        (0x030, "IRQ_STATUS"),
         (0x100, "OUTPUT0_PIXEL_COUNT"),
         (0x104, "OUTPUT0_BUFFER_OFFSET"),
         (0x108, "OUTPUT0_FLAGS"),
@@ -156,6 +158,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pin-test", action="store_true", help="drive PMOD outputs with slow PL square waves instead of running the app")
     parser.add_argument("--poll-seconds", type=float, default=5.0, help="register polling interval while the run is held open")
+    parser.add_argument("--poll-samples", type=int, default=0, help="number of register samples to print before exiting; 0 runs forever")
     args = parser.parse_args()
 
     if not BIT_FILE.exists():
@@ -217,6 +220,8 @@ def main():
             sample += 1
             print(f"PL_REGS_SAMPLE_{sample}", flush=True)
             print_pl_registers(session)
+            if args.poll_samples > 0 and sample >= args.poll_samples:
+                break
 
     except Exception as exc:
         print(f"ERROR: {exc}", flush=True)
