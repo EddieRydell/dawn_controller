@@ -56,9 +56,12 @@ vitis.dispose()
 
 app_elf = workspace / "donder_controller" / "build" / "donder_controller.elf"
 fsbl_elf = workspace / "donder_platform" / "zynq_fsbl" / "build" / "fsbl.elf"
+stamp = repo_root / "build" / "vitis" / ".app-built"
 if not app_elf.exists():
     raise SystemExit(f"Missing app ELF: {app_elf}")
 if not fsbl_elf.exists():
     raise SystemExit(f"Missing FSBL ELF: {fsbl_elf}")
+stamp.parent.mkdir(parents=True, exist_ok=True)
+stamp.touch()
 
 mark("complete")

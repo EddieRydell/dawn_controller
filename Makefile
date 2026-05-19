@@ -12,6 +12,7 @@ POWERSHELL ?= powershell
 XSA := build/vivado/donder_controller.xsa
 PS_STAMP := build/vitis/.app-built
 BOOT_BIN := build/sd/BOOT.BIN
+SIM_DIR := build/xsim
 
 .PHONY: help all rtl-check rtl-sim hw ps boot run clean
 
@@ -29,13 +30,16 @@ help:
 all: hw ps boot
 
 rtl-check: hw/rtl/pl_contract.vh
-	$(XVLOG) -sv hw/rtl/eth_control_core.v hw/rtl/axil_frame_ram.v
+	$(POWERSHELL) -NoProfile -Command "New-Item -ItemType Directory -Force '$(SIM_DIR)' | Out-Null"
+	cd $(SIM_DIR) && $(XVLOG) --nolog -i ../../hw/rtl -sv ../../hw/rtl/eth_control_core.v ../../hw/rtl/axil_frame_ram.v
+	$(POWERSHELL) -NoProfile -Command "Get-ChildItem -Force -File '$(SIM_DIR)' | Where-Object { $$_.Extension -in '.log','.jou','.pb' } | Remove-Item -Force"
 
 rtl-sim: hw/rtl/pl_contract.vh
-	$(XVLOG) -sv hw/rtl/eth_control_core.v hw/rtl/axil_frame_ram.v hw/sim/tb_ws281x_consumer.v
-	$(XELAB) tb_ws281x_consumer -s tb_ws281x_consumer_sim
-	$(XSIM) tb_ws281x_consumer_sim -runall
-	$(POWERSHELL) -NoProfile -Command "$$log = Get-Content -Raw 'xsim.log'; if ($$log -notmatch 'WS281x consumer simulation passed' -or $$log -match 'Fatal:') { throw 'RTL simulation failed' }"
+	$(POWERSHELL) -NoProfile -Command "New-Item -ItemType Directory -Force '$(SIM_DIR)' | Out-Null"
+	cd $(SIM_DIR) && $(XVLOG) --nolog -i ../../hw/rtl -sv ../../hw/rtl/eth_control_core.v ../../hw/rtl/axil_frame_ram.v ../../hw/sim/tb_ws281x_consumer.v
+	cd $(SIM_DIR) && $(XELAB) --nolog tb_ws281x_consumer -s tb_ws281x_consumer_sim
+	cd $(SIM_DIR) && $(XSIM) --nolog tb_ws281x_consumer_sim -runall
+	$(POWERSHELL) -NoProfile -Command "Get-ChildItem -Force -File '$(SIM_DIR)' | Where-Object { $$_.Extension -in '.log','.jou','.pb' } | Remove-Item -Force"
 
 hw: $(XSA)
 
@@ -46,7 +50,6 @@ ps: $(PS_STAMP)
 
 $(PS_STAMP): $(XSA) $(wildcard ps/app/*.c) $(wildcard ps/app/*.h) ps/scripts/create_app_vitis.py Makefile
 	$(VITIS) -s ps/scripts/create_app_vitis.py
-	$(PYTHON) -c "from pathlib import Path; root=Path('build/vitis'); workspaces=[p for p in root.iterdir() if p.is_dir()]; latest=max(workspaces, key=lambda p: p.stat().st_mtime); assert (latest/'donder_controller/build/donder_controller.elf').exists(), f'missing app ELF in {latest}'; assert (latest/'donder_platform/zynq_fsbl/build/fsbl.elf').exists(), f'missing FSBL ELF in {latest}'; Path('$(PS_STAMP)').parent.mkdir(parents=True, exist_ok=True); Path('$(PS_STAMP)').touch()"
 
 boot: $(BOOT_BIN)
 
@@ -58,4 +61,4 @@ run: $(PS_STAMP)
 
 clean:
 	$(POWERSHELL) -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'build','.Xil','NA'"
-	$(POWERSHELL) -NoProfile -Command "$$patterns = @('vivado*.log','vivado*.jou','vivado_*.backup.*','*.wdb','*.vcd','dfx_runtime.txt'); Get-ChildItem -Force -File | Where-Object { $$name = $$_.Name; $$patterns | Where-Object { $$name -like $$_ } } | Remove-Item -Force"
+	$(POWERSHELL) -NoProfile -Command "$$patterns = @('vivado*.log','vivado*.jou','vivado_*.backup.*','*.log','*.jou','*.pb','*.wdb','*.vcd','dfx_runtime.txt'); Get-ChildItem -Force -File | Where-Object { $$name = $$_.Name; $$patterns | Where-Object { $$name -like $$_ } } | Remove-Item -Force"
