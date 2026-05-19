@@ -56,7 +56,8 @@ module eth_control_core #(
 );
 
     localparam [31:0] CORE_ID = 32'h4546_504c; // "EFPL"
-    localparam [31:0] CORE_VERSION = 32'h0002_0000;
+    localparam [31:0] CORE_VERSION = 32'h0002_0001;
+    localparam [31:0] FRAME_WORDS_PER_BANK = FRAME_WORDS / 2;
 
     localparam [AXIL_ADDR_WIDTH-1:0] REG_ID              = 12'h000;
     localparam [AXIL_ADDR_WIDTH-1:0] REG_VERSION         = 12'h004;
@@ -71,6 +72,10 @@ module eth_control_core #(
     localparam [AXIL_ADDR_WIDTH-1:0] REG_FIRST_FRAME_WORD = 12'h02c;
     localparam [AXIL_ADDR_WIDTH-1:0] REG_LAST_FRAME_WORD = 12'h030;
     localparam [AXIL_ADDR_WIDTH-1:0] REG_ERROR_COUNT     = 12'h034;
+    localparam [AXIL_ADDR_WIDTH-1:0] REG_FRAME_BANK_WORDS = 12'h038;
+    localparam [AXIL_ADDR_WIDTH-1:0] REG_ACTIVE_BANK     = 12'h03c;
+    localparam [AXIL_ADDR_WIDTH-1:0] REG_WRITE_BANK      = 12'h040;
+    localparam [AXIL_ADDR_WIDTH-1:0] REG_FRAME_SEQUENCE  = 12'h044;
 
     localparam [31:0] STATUS_READY = 32'h0000_0001;
     localparam [31:0] STATUS_OVERFLOW = 32'h0000_0002;
@@ -89,7 +94,11 @@ module eth_control_core #(
     reg [31:0] committed_words_reg;
     reg [31:0] first_frame_word_reg;
     reg [31:0] last_frame_word_reg;
+    reg [31:0] staged_first_frame_word_reg;
+    reg [31:0] staged_last_frame_word_reg;
     reg [31:0] error_count_reg;
+    reg [31:0] active_bank_reg;
+    reg [31:0] frame_sequence_reg;
 
     reg [AXIL_ADDR_WIDTH-1:0] write_addr;
     reg [31:0] write_data;
@@ -129,6 +138,10 @@ module eth_control_core #(
             REG_FIRST_FRAME_WORD: read_register = first_frame_word_reg;
             REG_LAST_FRAME_WORD:  read_register = last_frame_word_reg;
             REG_ERROR_COUNT:      read_register = error_count_reg;
+            REG_FRAME_BANK_WORDS: read_register = FRAME_WORDS_PER_BANK;
+            REG_ACTIVE_BANK:      read_register = active_bank_reg;
+            REG_WRITE_BANK:       read_register = active_bank_reg ^ 32'h0000_0001;
+            REG_FRAME_SEQUENCE:   read_register = frame_sequence_reg;
             default:              read_register = 32'h0000_0000;
             endcase
         end
@@ -157,7 +170,11 @@ module eth_control_core #(
             committed_words_reg <= 32'h0000_0000;
             first_frame_word_reg <= 32'h0000_0000;
             last_frame_word_reg <= 32'h0000_0000;
+            staged_first_frame_word_reg <= 32'h0000_0000;
+            staged_last_frame_word_reg <= 32'h0000_0000;
             error_count_reg <= 32'h0000_0000;
+            active_bank_reg <= 32'h0000_0000;
+            frame_sequence_reg <= 32'h0000_0000;
         end else begin
             counter_reg <= counter_reg + 32'd1;
             s_axi_awready <= 1'b0;
@@ -197,20 +214,24 @@ module eth_control_core #(
                     pin_out_reg <= apply_wstrb(pin_out_reg, write_data, write_strb);
                 end
                 REG_FRAME_COMMIT: begin
-                    if (write_data <= FRAME_WORDS) begin
+                    if (write_data[30:0] <= FRAME_WORDS_PER_BANK) begin
                         frame_count_reg <= frame_count_reg + 32'd1;
-                        committed_words_reg <= write_data;
-                        pin_out_reg <= first_frame_word_reg;
+                        frame_sequence_reg <= frame_sequence_reg + 32'd1;
+                        active_bank_reg <= {31'h0000_0000, write_data[31]};
+                        committed_words_reg <= write_data[30:0];
+                        first_frame_word_reg <= staged_first_frame_word_reg;
+                        last_frame_word_reg <= staged_last_frame_word_reg;
+                        pin_out_reg <= staged_first_frame_word_reg;
                     end else begin
                         status_reg <= STATUS_READY | STATUS_OVERFLOW;
                         error_count_reg <= error_count_reg + 32'd1;
                     end
                 end
                 REG_FIRST_FRAME_WORD: begin
-                    first_frame_word_reg <= apply_wstrb(first_frame_word_reg, write_data, write_strb);
+                    staged_first_frame_word_reg <= apply_wstrb(staged_first_frame_word_reg, write_data, write_strb);
                 end
                 REG_LAST_FRAME_WORD: begin
-                    last_frame_word_reg <= apply_wstrb(last_frame_word_reg, write_data, write_strb);
+                    staged_last_frame_word_reg <= apply_wstrb(staged_last_frame_word_reg, write_data, write_strb);
                 end
                 default: begin
                 end

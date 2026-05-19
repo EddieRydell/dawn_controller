@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define PL_CORE_ID 0x4546504cu
-#define PL_CORE_VERSION 0x00020000u
+#define PL_CORE_VERSION 0x00020001u
 
 typedef enum {
     PL_INGEST_OK = 0,
@@ -21,6 +21,10 @@ typedef struct {
     uint32_t version;
     uint32_t status;
     uint32_t capacity_words;
+    uint32_t bank_words;
+    uint32_t active_bank;
+    uint32_t write_bank;
+    uint32_t frame_sequence;
     uint32_t frame_count;
     uint32_t committed_words;
     uint32_t error_count;

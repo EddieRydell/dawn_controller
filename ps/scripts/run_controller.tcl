@@ -46,6 +46,13 @@ proc print_reg {base offset name} {
     return $value
 }
 
+proc print_frame_word {base bank_words bank word name} {
+    set byte_offset [expr {(($bank * $bank_words) + $word) * 4}]
+    set value [mrd32 [expr {$base + $byte_offset}]]
+    puts [format "%s=0x%08x" $name $value]
+    return $value
+}
+
 proc select_or_error {filter} {
     targets -set -filter $filter
 }
@@ -98,6 +105,9 @@ print_reg $pl_control_base 0x004 VERSION
 print_reg $pl_control_base 0x00c STATUS
 print_reg $pl_control_base 0x010 PIN_OUT
 print_reg $pl_control_base 0x018 FRAME_CAPACITY
+print_reg $pl_control_base 0x038 FRAME_BANK_WORDS
+print_reg $pl_control_base 0x03c ACTIVE_BANK
+print_reg $pl_control_base 0x040 WRITE_BANK
 print_reg $pl_frame_base 0x000 FRAME_WORD0
 if {$core_id != 0x4546504c} {
     error [format "Unexpected PL core ID: 0x%08x" $core_id]
@@ -110,6 +120,7 @@ dow -force $app
 con
 
 after 5000
+catch {stop}
 puts "PL_AFTER_APP"
 print_reg $pl_control_base 0x010 PIN_OUT
 print_reg $pl_control_base 0x024 FRAME_COUNT
@@ -117,7 +128,11 @@ print_reg $pl_control_base 0x028 COMMITTED_WORDS
 print_reg $pl_control_base 0x02c FIRST_FRAME_WORD
 print_reg $pl_control_base 0x030 LAST_FRAME_WORD
 print_reg $pl_control_base 0x034 ERROR_COUNT
+set bank_words [print_reg $pl_control_base 0x038 FRAME_BANK_WORDS]
+set active_bank [print_reg $pl_control_base 0x03c ACTIVE_BANK]
+print_reg $pl_control_base 0x040 WRITE_BANK
+print_reg $pl_control_base 0x044 FRAME_SEQUENCE
 print_reg $pl_control_base 0x00c STATUS
-print_reg $pl_frame_base 0x000 FRAME_WORD0
+print_frame_word $pl_frame_base $bank_words $active_bank 0 ACTIVE_FRAME_WORD0
 
 disconnect

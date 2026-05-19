@@ -10,11 +10,11 @@ Zynq PS bare-metal app
   -> frame assembly in PS memory
   -> M_AXI_GP0 AXI-Lite writes
   -> eth_control_core control/status
-  -> axil_frame_ram frame window backed by alexforencich/verilog-axi axil_ram
+  -> double-buffered axil_frame_ram window backed by alexforencich/verilog-axi axil_ram
   -> deterministic PL consumer, next integration step
 ```
 
-The current PL contract already supports full-frame delivery into PL-owned storage. Ethernet receive and WS2811 output should be added behind this same contract, not as parallel scripts or alternate runtime modes.
+The current PL contract supports full-frame delivery into PL-owned storage with explicit two-bank ownership. The PS writes only the `WRITE_BANK`, commits that bank atomically, and the PL/debug side reads only the `ACTIVE_BANK`. Ethernet receive and WS2811 output should be added behind this same contract, not as parallel scripts or alternate runtime modes.
 
 ## Commands
 
@@ -74,21 +74,25 @@ Makefile
 | Offset | Name | Access | Purpose |
 | --- | --- | --- | --- |
 | `0x000` | `ID` | RO | Must read `0x4546504c` |
-| `0x004` | `VERSION` | RO | Must read `0x00020000` |
+| `0x004` | `VERSION` | RO | Must read `0x00020001` |
 | `0x008` | `CONTROL` | RW | Bit 1 clears sticky status |
 | `0x00c` | `STATUS` | RO | Bit 0 ready, bit 1 frame overflow |
 | `0x010` | `PIN_OUT` | RW | Low four bits drive `pl_data[3:0]` |
 | `0x014` | `COUNTER` | RO | Free-running PL clock counter |
 | `0x018` | `FRAME_CAPACITY` | RO | PL frame storage capacity in 32-bit words |
-| `0x020` | `FRAME_COMMIT` | WO | Write committed word count |
+| `0x020` | `FRAME_COMMIT` | WO | Atomic commit: bit 31 bank, bits 30:0 word count |
 | `0x024` | `FRAME_COUNT` | RO | Accepted frame commits |
 | `0x028` | `COMMITTED_WORDS` | RO | Word count from last commit |
 | `0x02c` | `FIRST_FRAME_WORD` | RW | First word metadata for commit proof |
 | `0x030` | `LAST_FRAME_WORD` | RW | Last word metadata for commit proof |
 | `0x034` | `ERROR_COUNT` | RO | Protocol errors detected by PL |
+| `0x038` | `FRAME_BANK_WORDS` | RO | Words per frame bank |
+| `0x03c` | `ACTIVE_BANK` | RO | Bank currently committed to PL/debug |
+| `0x040` | `WRITE_BANK` | RO | Bank currently owned by PS writes |
+| `0x044` | `FRAME_SEQUENCE` | RO | Monotonic accepted-commit sequence |
 
-Current frame format is one `0x00RRGGBB` word per pixel. The frame RAM capacity is `8192` words, enough for double the current configured frame size of `4 * 1024` pixels.
+Current frame format is one `0x00RRGGBB` word per pixel. The frame RAM capacity is `8192` words split into two `4096` word banks, matching the current configured frame size of `4 * 1024` pixels.
 
 ## Next Integration Boundary
 
-The PS app currently generates deterministic test frames and commits them through the same `pl_ingest_write_frame()` path that Ethernet receive will use. The Ethernet step should add lwIP UDP receive on the PS and map E1.31 slots into the inactive frame returned by `frame_pipeline_inactive_words()`. The PL side should then replace the PMOD pin proof with a deterministic consumer of the committed frame storage.
+The PS app currently generates deterministic test frames and commits them through the same `pl_ingest_write_frame()` path that Ethernet receive will use. The Ethernet step should add lwIP UDP receive on the PS and map E1.31 slots into the inactive frame returned by `frame_pipeline_inactive_words()`. Commit remains a single write to `FRAME_COMMIT`; the PL side should then replace the PMOD pin proof with a deterministic consumer of `ACTIVE_BANK`.

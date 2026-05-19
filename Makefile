@@ -30,9 +30,9 @@ $(XSA): hw/rtl/eth_control_core.v hw/rtl/axil_frame_ram.v third_party/verilog-ax
 
 ps: $(PS_STAMP)
 
-$(PS_STAMP): $(XSA) $(wildcard ps/app/*.c) $(wildcard ps/app/*.h) ps/scripts/create_app_vitis.py
+$(PS_STAMP): $(XSA) $(wildcard ps/app/*.c) $(wildcard ps/app/*.h) ps/scripts/create_app_vitis.py Makefile
 	$(VITIS) -s ps/scripts/create_app_vitis.py
-	$(PYTHON) -c "from pathlib import Path; Path('$(PS_STAMP)').parent.mkdir(parents=True, exist_ok=True); Path('$(PS_STAMP)').touch()"
+	$(PYTHON) -c "from pathlib import Path; import sys; root=Path('build/vitis'); apps=list(root.glob('*/donder_controller/build/donder_controller.elf')); fsbl=list(root.glob('*/donder_platform/zynq_fsbl/build/fsbl.elf')); assert apps and fsbl, 'missing Vitis ELF output'; Path('$(PS_STAMP)').parent.mkdir(parents=True, exist_ok=True); Path('$(PS_STAMP)').touch()"
 
 boot: $(BOOT_BIN)
 
