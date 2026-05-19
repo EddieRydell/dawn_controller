@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "pl_contract.h"
+#include "pl_control.h"
 
 typedef enum {
     PL_INGEST_OK = 0,
@@ -13,7 +13,6 @@ typedef enum {
     PL_INGEST_BAD_STATUS = -3,
     PL_INGEST_CAPACITY_TOO_SMALL = -4,
     PL_INGEST_READBACK_FAILED = -5,
-    PL_INGEST_BAD_PLATFORM = -6,
     PL_INGEST_COMMIT_FAILED = -7,
     PL_INGEST_CONSUMER_FAILED = -8,
     PL_INGEST_BAD_ARGUMENT = -9,

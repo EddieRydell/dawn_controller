@@ -1,0 +1,168 @@
+addrmap pl_control {
+    name = "PL control register block";
+    desc = "Local PS-to-PL control and status register block. Offsets are relative to the 4 KiB control aperture assigned by Vivado.";
+
+    reg {
+        name = "ID";
+        desc = "Identity value. Must read 0x4546504c.";
+        field { sw = r; hw = na; reset = 32'h4546504c; } value[31:0];
+    } ID @ 12'h000;
+
+    reg {
+        name = "VERSION";
+        desc = "Register contract version. Must read 0x00030000.";
+        field { sw = r; hw = na; reset = 32'h00030000; } value[31:0];
+    } VERSION @ 12'h004;
+
+    reg {
+        name = "CONTROL";
+        desc = "Software control bits.";
+        field { sw = rw; hw = r; reset = 1'b0; swmod = true; desc = "Write 1 to clear sticky status."; } clear_errors[1:1];
+        field { sw = rw; hw = r; reset = 1'b0; } reserved[0:0];
+    } CONTROL @ 12'h008;
+
+    reg {
+        name = "STATUS";
+        desc = "PL status bits.";
+        field { sw = r; hw = w; reset = 1'b1; desc = "Control block is ready."; } ready[0:0];
+        field { sw = r; hw = w; reset = 1'b0; desc = "Last commit exceeded bank capacity."; } overflow[1:1];
+        field { sw = r; hw = w; reset = 1'b0; desc = "WS281x consumer detected an error."; } consumer_error[2:2];
+    } STATUS @ 12'h00c;
+
+    reg {
+        name = "PIN_OUT";
+        desc = "Debug mirror of the first committed frame word.";
+        field { sw = rw; hw = rw; reset = 32'h0; swmod = true; } value[31:0];
+    } PIN_OUT @ 12'h010;
+
+    reg {
+        name = "COUNTER";
+        desc = "Free-running PL clock counter.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } COUNTER @ 12'h014;
+
+    reg {
+        name = "FRAME_CAPACITY";
+        desc = "PL frame storage capacity in 32-bit words.";
+        field { sw = r; hw = w; reset = 32'd8192; } value[31:0];
+    } FRAME_CAPACITY @ 12'h018;
+
+    reg {
+        name = "FRAME_COMMIT";
+        desc = "Atomic frame commit. Bit 31 selects bank; bits 30:0 are word count.";
+        field { sw = w; hw = r; reset = 31'h0; swmod = true; } word_count[30:0];
+        field { sw = w; hw = r; reset = 1'b0; swmod = true; } bank[31:31];
+    } FRAME_COMMIT @ 12'h020;
+
+    reg {
+        name = "FRAME_COUNT";
+        desc = "Accepted frame commit count.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } FRAME_COUNT @ 12'h024;
+
+    reg {
+        name = "COMMITTED_WORDS";
+        desc = "Word count from the last accepted commit.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } COMMITTED_WORDS @ 12'h028;
+
+    reg {
+        name = "FIRST_FRAME_WORD";
+        desc = "First word metadata staged by software and latched on commit.";
+        field { sw = rw; hw = rw; reset = 32'h0; swmod = true; } value[31:0];
+    } FIRST_FRAME_WORD @ 12'h02c;
+
+    reg {
+        name = "LAST_FRAME_WORD";
+        desc = "Last word metadata staged by software and latched on commit.";
+        field { sw = rw; hw = rw; reset = 32'h0; swmod = true; } value[31:0];
+    } LAST_FRAME_WORD @ 12'h030;
+
+    reg {
+        name = "ERROR_COUNT";
+        desc = "Protocol errors detected by PL.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } ERROR_COUNT @ 12'h034;
+
+    reg {
+        name = "FRAME_BANK_WORDS";
+        desc = "Words per frame bank.";
+        field { sw = r; hw = w; reset = 32'd4096; } value[31:0];
+    } FRAME_BANK_WORDS @ 12'h038;
+
+    reg {
+        name = "ACTIVE_BANK";
+        desc = "Bank currently committed to PL/debug.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } ACTIVE_BANK @ 12'h03c;
+
+    reg {
+        name = "WRITE_BANK";
+        desc = "Bank currently owned by PS writes.";
+        field { sw = r; hw = w; reset = 32'h1; } value[31:0];
+    } WRITE_BANK @ 12'h040;
+
+    reg {
+        name = "FRAME_SEQUENCE";
+        desc = "Monotonic accepted-commit sequence.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } FRAME_SEQUENCE @ 12'h044;
+
+    reg {
+        name = "CONSUMER_CONTROL";
+        desc = "WS281x consumer control.";
+        field { sw = rw; hw = r; reset = 1'b0; } enable[0:0];
+        field { sw = rw; hw = r; reset = 1'b0; swmod = true; } reset_fsm[1:1];
+    } CONSUMER_CONTROL @ 12'h048;
+
+    reg {
+        name = "CONSUMER_STATUS";
+        desc = "WS281x consumer status.";
+        field { sw = r; hw = w; reset = 1'b0; } enabled[0:0];
+        field { sw = r; hw = w; reset = 1'b0; } busy[1:1];
+        field { sw = r; hw = w; reset = 1'b0; } reset_low[2:2];
+        field { sw = r; hw = w; reset = 1'b0; } error[3:3];
+    } CONSUMER_STATUS @ 12'h04c;
+
+    reg {
+        name = "CONSUMER_SEQUENCE";
+        desc = "Last frame sequence fully consumed by WS281x serializer.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } CONSUMER_SEQUENCE @ 12'h050;
+
+    reg {
+        name = "CONSUMER_FRAME_COUNT";
+        desc = "Completed WS281x frame transmissions.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } CONSUMER_FRAME_COUNT @ 12'h054;
+
+    reg {
+        name = "CONSUMER_ERROR_COUNT";
+        desc = "Consumer-side protocol/read errors.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } CONSUMER_ERROR_COUNT @ 12'h058;
+
+    reg {
+        name = "WS281X_BIT_RATE";
+        desc = "Configured serializer bit rate.";
+        field { sw = r; hw = na; reset = 32'd800000; } value[31:0];
+    } WS281X_BIT_RATE @ 12'h05c;
+
+    reg {
+        name = "WS281X_OUTPUT_COUNT";
+        desc = "Configured parallel output count.";
+        field { sw = r; hw = na; reset = 32'd4; } value[31:0];
+    } WS281X_OUTPUT_COUNT @ 12'h060;
+
+    reg {
+        name = "WS281X_PIXELS_PER_OUTPUT";
+        desc = "Configured pixels per output.";
+        field { sw = r; hw = na; reset = 32'd1024; } value[31:0];
+    } WS281X_PIXELS_PER_OUTPUT @ 12'h064;
+
+    reg {
+        name = "CONSUMER_DEBUG";
+        desc = "Packed FSM debug snapshot for JTAG bring-up.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } CONSUMER_DEBUG @ 12'h068;
+};

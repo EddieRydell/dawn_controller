@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "../rtl/pl_contract.vh"
 
 module tb_ws281x_consumer;
     localparam AXIL_ADDR_WIDTH = 12;
@@ -7,6 +6,31 @@ module tb_ws281x_consumer;
     localparam OUTPUT_COUNT = 4;
     localparam PIXELS_PER_OUTPUT = 2;
     localparam FRAME_WORDS = 16;
+    localparam [31:0] PL_CONTROL_ID_VALUE = 32'h4546_504c;
+    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0003_0000;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ID_OFFSET = 12'h000;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_VERSION_OFFSET = 12'h004;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONTROL_OFFSET = 12'h008;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STATUS_OFFSET = 12'h00c;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_COMMIT_OFFSET = 12'h020;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_COUNT_OFFSET = 12'h024;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_COMMITTED_WORDS_OFFSET = 12'h028;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ERROR_COUNT_OFFSET = 12'h034;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_BANK_WORDS_OFFSET = 12'h038;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ACTIVE_BANK_OFFSET = 12'h03c;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_WRITE_BANK_OFFSET = 12'h040;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_SEQUENCE_OFFSET = 12'h044;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_CONTROL_OFFSET = 12'h048;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_STATUS_OFFSET = 12'h04c;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_SEQUENCE_OFFSET = 12'h050;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET = 12'h054;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_ERROR_COUNT_OFFSET = 12'h058;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_DEBUG_OFFSET = 12'h068;
+    localparam [31:0] PL_CONTROL_STATUS_READY = 32'h0000_0001;
+    localparam [31:0] PL_CONTROL_STATUS_OVERFLOW = 32'h0000_0002;
+    localparam [31:0] PL_CONTROL_CONTROL_CLEAR_ERRORS = 32'h0000_0002;
+    localparam [31:0] PL_CONTROL_CONSUMER_ENABLE = 32'h0000_0001;
+    localparam [31:0] PL_CONTROL_CONSUMER_RESET = 32'h0000_0002;
 
     reg aclk = 1'b0;
     reg aresetn = 1'b0;
@@ -198,33 +222,33 @@ module tb_ws281x_consumer;
         aresetn <= 1'b1;
         repeat (8) @(posedge aclk);
 
-        ctl_read(`PL_REG_ID, read_data);
-        if (read_data != `PL_CORE_ID) begin
+        ctl_read(PL_CONTROL_ID_OFFSET, read_data);
+        if (read_data != PL_CONTROL_ID_VALUE) begin
             $fatal(1, "core ID is %08x", read_data);
         end
-        ctl_read(`PL_REG_VERSION, read_data);
-        if (read_data != `PL_CORE_VERSION) begin
+        ctl_read(PL_CONTROL_VERSION_OFFSET, read_data);
+        if (read_data != PL_CONTROL_VERSION_VALUE) begin
             $fatal(1, "core version is %08x", read_data);
         end
 
-        ctl_read(`PL_REG_FRAME_BANK_WORDS, bank_words);
-        ctl_read(`PL_REG_WRITE_BANK, write_bank);
+        ctl_read(PL_CONTROL_FRAME_BANK_WORDS_OFFSET, bank_words);
+        ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, write_bank);
         if (write_bank > 1) begin
             $fatal(1, "write bank is %08x", write_bank);
         end
 
-        ctl_write(`PL_REG_FRAME_COMMIT, bank_words + 1);
-        ctl_read(`PL_REG_STATUS, read_data);
-        if ((read_data & `PL_STATUS_OVERFLOW) == 0) begin
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, bank_words + 1);
+        ctl_read(PL_CONTROL_STATUS_OFFSET, read_data);
+        if ((read_data & PL_CONTROL_STATUS_OVERFLOW) == 0) begin
             $fatal(1, "oversized commit did not set overflow: %08x", read_data);
         end
-        ctl_read(`PL_REG_ERROR_COUNT, read_data);
+        ctl_read(PL_CONTROL_ERROR_COUNT_OFFSET, read_data);
         if (read_data != 32'h0000_0001) begin
             $fatal(1, "oversized commit error count is %08x", read_data);
         end
-        ctl_write(`PL_REG_CONTROL, 32'h0000_0002);
-        ctl_read(`PL_REG_STATUS, read_data);
-        if (read_data != `PL_STATUS_READY) begin
+        ctl_write(PL_CONTROL_CONTROL_OFFSET, PL_CONTROL_CONTROL_CLEAR_ERRORS);
+        ctl_read(PL_CONTROL_STATUS_OFFSET, read_data);
+        if (read_data != PL_CONTROL_STATUS_READY) begin
             $fatal(1, "clear errors left status %08x", read_data);
         end
 
@@ -233,28 +257,28 @@ module tb_ws281x_consumer;
             ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0001_0203 + i);
         end
 
-        ctl_write(`PL_REG_FRAME_COMMIT, (write_bank << 31) | (OUTPUT_COUNT * PIXELS_PER_OUTPUT));
-        ctl_read(`PL_REG_ACTIVE_BANK, read_data);
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (write_bank << 31) | (OUTPUT_COUNT * PIXELS_PER_OUTPUT));
+        ctl_read(PL_CONTROL_ACTIVE_BANK_OFFSET, read_data);
         if (read_data != write_bank) begin
             $fatal(1, "active bank is %08x expected %08x", read_data, write_bank);
         end
-        ctl_read(`PL_REG_WRITE_BANK, read_data);
+        ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
         if (read_data != (write_bank ^ 32'h0000_0001)) begin
             $fatal(1, "next write bank is %08x", read_data);
         end
 
-        ctl_write(`PL_REG_CONSUMER_CONTROL, `PL_CONSUMER_RESET);
-        ctl_write(`PL_REG_CONTROL, 32'h0000_0002);
-        ctl_write(`PL_REG_CONSUMER_CONTROL, `PL_CONSUMER_ENABLE);
+        ctl_write(PL_CONTROL_CONSUMER_CONTROL_OFFSET, PL_CONTROL_CONSUMER_RESET);
+        ctl_write(PL_CONTROL_CONTROL_OFFSET, PL_CONTROL_CONTROL_CLEAR_ERRORS);
+        ctl_write(PL_CONTROL_CONSUMER_CONTROL_OFFSET, PL_CONTROL_CONSUMER_ENABLE);
 
         for (i = 0; i < 200000; i = i + 1) begin
-            ctl_read(`PL_REG_CONSUMER_FRAME_COUNT, read_data);
+            ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
             if (read_data == 32'h0000_0001) begin
-                ctl_read(`PL_REG_CONSUMER_ERROR_COUNT, read_data);
+                ctl_read(PL_CONTROL_CONSUMER_ERROR_COUNT_OFFSET, read_data);
                 if (read_data != 32'h0000_0000) begin
                     $fatal(1, "consumer error count is %08x", read_data);
                 end
-                ctl_read(`PL_REG_CONSUMER_SEQUENCE, read_data);
+                ctl_read(PL_CONTROL_CONSUMER_SEQUENCE_OFFSET, read_data);
                 if (read_data != 32'h0000_0001) begin
                     $fatal(1, "consumer sequence is %08x", read_data);
                 end
@@ -263,17 +287,17 @@ module tb_ws281x_consumer;
             end
         end
 
-        ctl_read(`PL_REG_CONSUMER_STATUS, read_data);
+        ctl_read(PL_CONTROL_CONSUMER_STATUS_OFFSET, read_data);
         $display("CONSUMER_STATUS=%08x", read_data);
-        ctl_read(`PL_REG_CONSUMER_DEBUG, read_data);
+        ctl_read(PL_CONTROL_CONSUMER_DEBUG_OFFSET, read_data);
         $display("CONSUMER_DEBUG=%08x", read_data);
-        ctl_read(`PL_REG_FRAME_COUNT, read_data);
+        ctl_read(PL_CONTROL_FRAME_COUNT_OFFSET, read_data);
         $display("FRAME_COUNT=%08x", read_data);
-        ctl_read(`PL_REG_COMMITTED_WORDS, read_data);
+        ctl_read(PL_CONTROL_COMMITTED_WORDS_OFFSET, read_data);
         $display("COMMITTED_WORDS=%08x", read_data);
-        ctl_read(`PL_REG_ACTIVE_BANK, read_data);
+        ctl_read(PL_CONTROL_ACTIVE_BANK_OFFSET, read_data);
         $display("ACTIVE_BANK=%08x", read_data);
-        ctl_read(`PL_REG_FRAME_SEQUENCE, read_data);
+        ctl_read(PL_CONTROL_FRAME_SEQUENCE_OFFSET, read_data);
         $display("FRAME_SEQUENCE=%08x", read_data);
         $fatal(1, "consumer did not complete");
     end

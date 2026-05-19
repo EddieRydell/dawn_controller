@@ -1,5 +1,7 @@
 #include "pl_ingest.h"
 
+#include <stddef.h>
+
 #include "xil_io.h"
 #include "xil_printf.h"
 #include "xparameters.h"
@@ -19,6 +21,8 @@
 #else
 #error "Missing AXIL_FRAME_RAM_0 base address in xparameters.h"
 #endif
+
+#define PL_CONTROL_OFFSET(reg) ((uint32_t)offsetof(pl_control_t, reg))
 
 uint32_t pl_ingest_read(uint32_t offset)
 {
@@ -47,21 +51,21 @@ static uint32_t expected_next(uint32_t value)
 
 void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot)
 {
-    snapshot->id = pl_ingest_read(PL_REG_ID);
-    snapshot->version = pl_ingest_read(PL_REG_VERSION);
-    snapshot->status = pl_ingest_read(PL_REG_STATUS);
-    snapshot->capacity_words = pl_ingest_read(PL_REG_FRAME_CAPACITY);
-    snapshot->bank_words = pl_ingest_read(PL_REG_FRAME_BANK_WORDS);
-    snapshot->active_bank = pl_ingest_read(PL_REG_ACTIVE_BANK);
-    snapshot->write_bank = pl_ingest_read(PL_REG_WRITE_BANK);
-    snapshot->frame_sequence = pl_ingest_read(PL_REG_FRAME_SEQUENCE);
-    snapshot->frame_count = pl_ingest_read(PL_REG_FRAME_COUNT);
-    snapshot->committed_words = pl_ingest_read(PL_REG_COMMITTED_WORDS);
-    snapshot->error_count = pl_ingest_read(PL_REG_ERROR_COUNT);
-    snapshot->consumer_status = pl_ingest_read(PL_REG_CONSUMER_STATUS);
-    snapshot->consumer_sequence = pl_ingest_read(PL_REG_CONSUMER_SEQUENCE);
-    snapshot->consumer_frame_count = pl_ingest_read(PL_REG_CONSUMER_FRAME_COUNT);
-    snapshot->consumer_error_count = pl_ingest_read(PL_REG_CONSUMER_ERROR_COUNT);
+    snapshot->id = pl_ingest_read(PL_CONTROL_OFFSET(ID));
+    snapshot->version = pl_ingest_read(PL_CONTROL_OFFSET(VERSION));
+    snapshot->status = pl_ingest_read(PL_CONTROL_OFFSET(STATUS));
+    snapshot->capacity_words = pl_ingest_read(PL_CONTROL_OFFSET(FRAME_CAPACITY));
+    snapshot->bank_words = pl_ingest_read(PL_CONTROL_OFFSET(FRAME_BANK_WORDS));
+    snapshot->active_bank = pl_ingest_read(PL_CONTROL_OFFSET(ACTIVE_BANK));
+    snapshot->write_bank = pl_ingest_read(PL_CONTROL_OFFSET(WRITE_BANK));
+    snapshot->frame_sequence = pl_ingest_read(PL_CONTROL_OFFSET(FRAME_SEQUENCE));
+    snapshot->frame_count = pl_ingest_read(PL_CONTROL_OFFSET(FRAME_COUNT));
+    snapshot->committed_words = pl_ingest_read(PL_CONTROL_OFFSET(COMMITTED_WORDS));
+    snapshot->error_count = pl_ingest_read(PL_CONTROL_OFFSET(ERROR_COUNT));
+    snapshot->consumer_status = pl_ingest_read(PL_CONTROL_OFFSET(CONSUMER_STATUS));
+    snapshot->consumer_sequence = pl_ingest_read(PL_CONTROL_OFFSET(CONSUMER_SEQUENCE));
+    snapshot->consumer_frame_count = pl_ingest_read(PL_CONTROL_OFFSET(CONSUMER_FRAME_COUNT));
+    snapshot->consumer_error_count = pl_ingest_read(PL_CONTROL_OFFSET(CONSUMER_ERROR_COUNT));
 }
 
 pl_ingest_result_t pl_ingest_init(uint32_t required_words)
@@ -81,24 +85,21 @@ pl_ingest_result_t pl_ingest_init(uint32_t required_words)
                (unsigned long)snapshot.status,
                (unsigned long)snapshot.consumer_status);
 
-    if (PL_CONTROL_BASEADDR != PL_CONTROL_EXPECTED_BASEADDR || PL_FRAME_BASEADDR != PL_FRAME_EXPECTED_BASEADDR) {
-        return PL_INGEST_BAD_PLATFORM;
-    }
-    if (snapshot.id != PL_CORE_ID) {
+    if (snapshot.id != PL_CONTROL__ID__VALUE_reset) {
         return PL_INGEST_BAD_ID;
     }
-    if (snapshot.version != PL_CORE_VERSION) {
+    if (snapshot.version != PL_CONTROL__VERSION__VALUE_reset) {
         return PL_INGEST_BAD_VERSION;
     }
-    if ((snapshot.status & PL_STATUS_READY) == 0u
-        || (snapshot.status & (PL_STATUS_OVERFLOW | PL_STATUS_CONSUMER_ERROR)) != 0u) {
+    if ((snapshot.status & PL_CONTROL__STATUS__READY_bm) == 0u
+        || (snapshot.status & (PL_CONTROL__STATUS__OVERFLOW_bm | PL_CONTROL__STATUS__CONSUMER_ERROR_bm)) != 0u) {
         return PL_INGEST_BAD_STATUS;
     }
     if (snapshot.bank_words < required_words) {
         return PL_INGEST_CAPACITY_TOO_SMALL;
     }
 
-    pl_ingest_write(PL_REG_CONTROL, PL_CONTROL_CLEAR_ERRORS);
+    pl_ingest_write(PL_CONTROL_OFFSET(CONTROL), PL_CONTROL__CONTROL__CLEAR_ERRORS_bm);
     return PL_INGEST_OK;
 }
 
@@ -115,21 +116,21 @@ pl_ingest_result_t pl_ingest_self_test(void)
         0x0badc0deu,
     };
 
-    uint32_t before = pl_ingest_read(PL_REG_FRAME_COUNT);
+    uint32_t before = pl_ingest_read(PL_CONTROL_OFFSET(FRAME_COUNT));
 
     if (pl_ingest_write_frame(frame, sizeof(frame) / sizeof(frame[0])) != PL_INGEST_OK) {
         return PL_INGEST_READBACK_FAILED;
     }
-    if (pl_ingest_read(PL_REG_FRAME_COUNT) != before + 1u) {
+    if (pl_ingest_read(PL_CONTROL_OFFSET(FRAME_COUNT)) != before + 1u) {
         return PL_INGEST_READBACK_FAILED;
     }
-    if (pl_ingest_read(PL_REG_COMMITTED_WORDS) != sizeof(frame) / sizeof(frame[0])) {
+    if (pl_ingest_read(PL_CONTROL_OFFSET(COMMITTED_WORDS)) != sizeof(frame) / sizeof(frame[0])) {
         return PL_INGEST_READBACK_FAILED;
     }
-    if (pl_ingest_read(PL_REG_ACTIVE_BANK) > 1u || pl_ingest_read(PL_REG_WRITE_BANK) > 1u) {
+    if (pl_ingest_read(PL_CONTROL_OFFSET(ACTIVE_BANK)) > 1u || pl_ingest_read(PL_CONTROL_OFFSET(WRITE_BANK)) > 1u) {
         return PL_INGEST_READBACK_FAILED;
     }
-    if (pl_ingest_read(PL_REG_LAST_FRAME_WORD) != frame[7]) {
+    if (pl_ingest_read(PL_CONTROL_OFFSET(LAST_FRAME_WORD)) != frame[7]) {
         return PL_INGEST_READBACK_FAILED;
     }
 
@@ -154,11 +155,11 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
     write_bank = before.write_bank;
     bank_offset = (size_t)write_bank * (size_t)bank_words;
 
-    if ((before.status & PL_STATUS_READY) == 0u
-        || (before.status & (PL_STATUS_OVERFLOW | PL_STATUS_CONSUMER_ERROR)) != 0u) {
+    if ((before.status & PL_CONTROL__STATUS__READY_bm) == 0u
+        || (before.status & (PL_CONTROL__STATUS__OVERFLOW_bm | PL_CONTROL__STATUS__CONSUMER_ERROR_bm)) != 0u) {
         return PL_INGEST_BAD_STATUS;
     }
-    if (write_bank > 1u || word_count > bank_words || word_count > PL_FRAME_COMMIT_WORD_MASK) {
+    if (write_bank > 1u || word_count > bank_words || word_count > PL_CONTROL__FRAME_COMMIT__WORD_COUNT_bm) {
         return PL_INGEST_CAPACITY_TOO_SMALL;
     }
 
@@ -167,11 +168,11 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
     }
 
     if (word_count > 0u) {
-        pl_ingest_write(PL_REG_FIRST_FRAME_WORD, words[0]);
-        pl_ingest_write(PL_REG_LAST_FRAME_WORD, words[word_count - 1u]);
+        pl_ingest_write(PL_CONTROL_OFFSET(FIRST_FRAME_WORD), words[0]);
+        pl_ingest_write(PL_CONTROL_OFFSET(LAST_FRAME_WORD), words[word_count - 1u]);
     } else {
-        pl_ingest_write(PL_REG_FIRST_FRAME_WORD, 0u);
-        pl_ingest_write(PL_REG_LAST_FRAME_WORD, 0u);
+        pl_ingest_write(PL_CONTROL_OFFSET(FIRST_FRAME_WORD), 0u);
+        pl_ingest_write(PL_CONTROL_OFFSET(LAST_FRAME_WORD), 0u);
     }
 
     if (word_count > 0u && pl_frame_read_word(bank_offset) != words[0]) {
@@ -181,8 +182,8 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
         return PL_INGEST_READBACK_FAILED;
     }
 
-    commit_value = (write_bank << PL_FRAME_COMMIT_BANK_SHIFT) | (uint32_t)word_count;
-    pl_ingest_write(PL_REG_FRAME_COMMIT, commit_value);
+    commit_value = (write_bank << PL_CONTROL__FRAME_COMMIT__BANK_bp) | (uint32_t)word_count;
+    pl_ingest_write(PL_CONTROL_OFFSET(FRAME_COMMIT), commit_value);
 
     pl_ingest_snapshot(&after);
     if (after.frame_count != expected_next(before.frame_count)
@@ -190,8 +191,8 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
         || after.active_bank != write_bank
         || after.write_bank != (write_bank ^ 1u)
         || after.committed_words != word_count
-        || (after.status & PL_STATUS_READY) == 0u
-        || (after.status & (PL_STATUS_OVERFLOW | PL_STATUS_CONSUMER_ERROR)) != 0u) {
+        || (after.status & PL_CONTROL__STATUS__READY_bm) == 0u
+        || (after.status & (PL_CONTROL__STATUS__OVERFLOW_bm | PL_CONTROL__STATUS__CONSUMER_ERROR_bm)) != 0u) {
         return PL_INGEST_COMMIT_FAILED;
     }
 
@@ -202,13 +203,13 @@ pl_ingest_result_t pl_ingest_enable_consumer(void)
 {
     uint32_t consumer_status;
 
-    pl_ingest_write(PL_REG_CONSUMER_CONTROL, PL_CONSUMER_RESET);
-    pl_ingest_write(PL_REG_CONTROL, PL_CONTROL_CLEAR_ERRORS);
-    pl_ingest_write(PL_REG_CONSUMER_CONTROL, PL_CONSUMER_ENABLE);
+    pl_ingest_write(PL_CONTROL_OFFSET(CONSUMER_CONTROL), PL_CONTROL__CONSUMER_CONTROL__RESET_FSM_bm);
+    pl_ingest_write(PL_CONTROL_OFFSET(CONTROL), PL_CONTROL__CONTROL__CLEAR_ERRORS_bm);
+    pl_ingest_write(PL_CONTROL_OFFSET(CONSUMER_CONTROL), PL_CONTROL__CONSUMER_CONTROL__ENABLE_bm);
 
-    consumer_status = pl_ingest_read(PL_REG_CONSUMER_STATUS);
-    if ((consumer_status & PL_CONSUMER_STATUS_ENABLED) == 0u
-        || (consumer_status & PL_CONSUMER_STATUS_ERROR) != 0u) {
+    consumer_status = pl_ingest_read(PL_CONTROL_OFFSET(CONSUMER_STATUS));
+    if ((consumer_status & PL_CONTROL__CONSUMER_STATUS__ENABLED_bm) == 0u
+        || (consumer_status & PL_CONTROL__CONSUMER_STATUS__ERROR_bm) != 0u) {
         return PL_INGEST_CONSUMER_FAILED;
     }
 
@@ -217,5 +218,5 @@ pl_ingest_result_t pl_ingest_enable_consumer(void)
 
 void pl_ingest_drive_pins(uint32_t value)
 {
-    pl_ingest_write(PL_REG_PIN_OUT, value & 0x0fu);
+    pl_ingest_write(PL_CONTROL_OFFSET(PIN_OUT), value & 0x0fu);
 }

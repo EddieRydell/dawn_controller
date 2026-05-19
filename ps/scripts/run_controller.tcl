@@ -120,7 +120,6 @@ dow -force $app
 con
 
 after 5000
-catch {stop}
 puts "PL_AFTER_APP"
 print_reg $pl_control_base 0x010 PIN_OUT
 print_reg $pl_control_base 0x024 FRAME_COUNT
