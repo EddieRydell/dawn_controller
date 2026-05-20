@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module eth_control_core #(
+module ws281x_controller_core #(
     parameter AXIL_ADDR_WIDTH = 12,
     parameter FRAME_WORDS = 8192,
     parameter FRAME_ADDR_WIDTH = 15,
@@ -61,15 +61,23 @@ module eth_control_core #(
     output wire                       m_frame_rready
 );
 
-    eth_control_core_impl #(
+    wire consumer_enable;
+    wire consumer_reset_pulse;
+    wire consumer_busy;
+    wire consumer_reset_low;
+    wire consumer_error_pulse;
+    wire [31:0] active_bank;
+    wire [31:0] committed_words;
+    wire [31:0] frame_sequence;
+    wire [31:0] consumer_sequence;
+    wire [31:0] consumer_frame_count;
+    wire [31:0] consumer_error_count;
+    wire [31:0] consumer_debug;
+
+    pl_frame_control #(
         .AXIL_ADDR_WIDTH(AXIL_ADDR_WIDTH),
-        .FRAME_WORDS(FRAME_WORDS),
-        .FRAME_ADDR_WIDTH(FRAME_ADDR_WIDTH),
-        .OUTPUT_COUNT(OUTPUT_COUNT),
-        .PIXELS_PER_OUTPUT(PIXELS_PER_OUTPUT),
-        .CLK_HZ(CLK_HZ),
-        .WS281X_BIT_RATE(WS281X_BIT_RATE)
-    ) impl (
+        .FRAME_WORDS(FRAME_WORDS)
+    ) frame_control (
         .aclk(aclk),
         .aresetn(aresetn),
         .s_axi_awaddr(s_axi_awaddr),
@@ -91,6 +99,42 @@ module eth_control_core #(
         .s_axi_rresp(s_axi_rresp),
         .s_axi_rvalid(s_axi_rvalid),
         .s_axi_rready(s_axi_rready),
+        .consumer_enable(consumer_enable),
+        .consumer_reset_pulse(consumer_reset_pulse),
+        .consumer_busy(consumer_busy),
+        .consumer_reset_low(consumer_reset_low),
+        .consumer_error_pulse(consumer_error_pulse),
+        .consumer_sequence(consumer_sequence),
+        .consumer_frame_count(consumer_frame_count),
+        .consumer_error_count(consumer_error_count),
+        .consumer_debug(consumer_debug),
+        .active_bank(active_bank),
+        .committed_words(committed_words),
+        .frame_sequence(frame_sequence)
+    );
+
+    ws281x_frame_consumer #(
+        .FRAME_WORDS(FRAME_WORDS),
+        .FRAME_ADDR_WIDTH(FRAME_ADDR_WIDTH),
+        .OUTPUT_COUNT(OUTPUT_COUNT),
+        .PIXELS_PER_OUTPUT(PIXELS_PER_OUTPUT),
+        .CLK_HZ(CLK_HZ),
+        .WS281X_BIT_RATE(WS281X_BIT_RATE)
+    ) consumer (
+        .aclk(aclk),
+        .aresetn(aresetn),
+        .enable(consumer_enable),
+        .reset_pulse(consumer_reset_pulse),
+        .active_bank(active_bank),
+        .committed_words(committed_words),
+        .frame_sequence(frame_sequence),
+        .busy(consumer_busy),
+        .reset_low(consumer_reset_low),
+        .error_pulse(consumer_error_pulse),
+        .consumer_sequence(consumer_sequence),
+        .consumer_frame_count(consumer_frame_count),
+        .consumer_error_count(consumer_error_count),
+        .consumer_debug(consumer_debug),
         .ws281x_data(ws281x_data),
         .m_frame_araddr(m_frame_araddr),
         .m_frame_arvalid(m_frame_arvalid),

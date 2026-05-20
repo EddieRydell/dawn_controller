@@ -55,11 +55,17 @@ def main() -> int:
         print("usage: run_xsdb_checked.py <xsdb-script> [args...]", file=sys.stderr)
         return 2
 
+    repo_root = Path(__file__).resolve().parents[2]
+    xsdb_script = Path(sys.argv[1])
+    if not xsdb_script.is_absolute():
+        xsdb_script = repo_root / xsdb_script
+    xsdb_args = [str(xsdb_script), *sys.argv[2:]]
+
     xsdb = os.environ.get("XSDB")
     if xsdb is None:
         xsdb = shutil.which("xsdb.bat") or shutil.which("xsdb") or "xsdb"
 
-    log_dir = Path("build") / "jtag"
+    log_dir = repo_root / "build" / "jtag"
     log_dir.mkdir(parents=True, exist_ok=True)
     xsdb_log_path = log_dir / "xsdb_run.log"
     hw_log_path = log_dir / "hw_server_xsdb.log"
@@ -76,6 +82,7 @@ def main() -> int:
             [hw_server, "-sTCP::3121", "-I60"],
             stdout=hw_log,
             stderr=subprocess.STDOUT,
+            cwd=log_dir,
         )
         if not wait_for_port("localhost", 3121, 10):
             print("ERROR: hw_server did not open TCP port 3121", file=sys.stderr)
@@ -85,11 +92,12 @@ def main() -> int:
     xsdb_log = xsdb_log_path.open("w", encoding="utf-8")
     try:
         process = subprocess.Popen(
-            [xsdb, *sys.argv[1:]],
+            [xsdb, *xsdb_args],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            cwd=log_dir,
         )
 
         assert process.stdout is not None

@@ -9,7 +9,7 @@ Zynq PS bare-metal app
   -> onboard PS Ethernet path, next integration step
   -> frame assembly in PS memory
   -> M_AXI_GP0 AXI-Lite writes
-  -> eth_control_core control/status
+  -> pl_frame_control control/status
   -> double-buffered axil_frame_ram window
   -> deterministic PL WS281x serializer
 ```
@@ -58,8 +58,9 @@ bare-metal controller app
 ```text
 hw/regs/pl_control.rdl       SystemRDL source of truth for PL control registers
 hw/rtl/generated/            PeakRDL-generated AXI-Lite control register block
-hw/rtl/eth_control_core.v    Vivado block-design module top
-hw/rtl/eth_control_core.sv   Custom commit/status and WS281x consumer implementation
+hw/rtl/pl_frame_control.sv       Reusable PS-to-PL AXI-Lite control and frame commit foundation
+hw/rtl/ws281x_frame_consumer.sv  WS281x frame reader and serializer
+hw/rtl/ws281x_controller_core.v  Light-controller wrapper that wires the foundation to the WS281x consumer
 hw/rtl/axil_frame_ram.v      AXI-Lite frame RAM with a second PL read port
 hw/sim/tb_ws281x_consumer.v  Focused WS281x consumer RTL simulation
 hw/scripts/build.tcl         Vivado batch hardware build

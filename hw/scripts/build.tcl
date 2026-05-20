@@ -19,8 +19,9 @@ if {[llength [get_board_parts -quiet $pynq_z2_board_part]] > 0} {
 add_files -fileset sources_1 [list \
   [file join $repo_root hw rtl generated pl_control_regs_pkg.sv] \
   [file join $repo_root hw rtl generated pl_control_regs.sv] \
-  [file join $repo_root hw rtl eth_control_core.sv] \
-  [file join $repo_root hw rtl eth_control_core.v] \
+  [file join $repo_root hw rtl pl_frame_control.sv] \
+  [file join $repo_root hw rtl ws281x_frame_consumer.sv] \
+  [file join $repo_root hw rtl ws281x_controller_core.v] \
   [file join $repo_root hw rtl axil_frame_ram.v] \
 ]
 add_files -fileset constrs_1 [file join $repo_root hw constraints pynq_z2.xdc]

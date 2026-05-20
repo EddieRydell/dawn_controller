@@ -65,7 +65,7 @@ def main() -> int:
         str(BOOT_BIN),
     ]
     print(" ".join(command), flush=True)
-    subprocess.check_call(command, cwd=REPO_ROOT)
+    subprocess.check_call(command, cwd=BOOT_DIR)
 
     if not BOOT_BIN.exists():
         raise RuntimeError(f"Missing BOOT.BIN: {BOOT_BIN}")

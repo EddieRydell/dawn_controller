@@ -92,7 +92,7 @@ module tb_ws281x_consumer;
 
     always #5 aclk = ~aclk;
 
-    eth_control_core #(
+    ws281x_controller_core #(
         .AXIL_ADDR_WIDTH(AXIL_ADDR_WIDTH),
         .FRAME_WORDS(FRAME_WORDS),
         .FRAME_ADDR_WIDTH(FRAME_ADDR_WIDTH),
