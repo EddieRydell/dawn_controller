@@ -19,6 +19,8 @@ The current PL contract supports full-frame delivery into PL-owned storage with 
 ## Commands
 
 Run from a Xilinx-enabled shell where Vivado, Vitis, Bootgen, XSDB, and hw_server are on `PATH`.
+This will install four peakrdl dependencies globally and then test and build the project. 
+Create a python venv if you don't want the peakrdl deps installed globally.
 
 ```powershell
 python -m pip install -r requirements-regs.txt
@@ -78,7 +80,7 @@ Makefile
 | Control | `0x43C00000` | 4 KiB | Identity, status, counters, commit |
 | Frame RAM | `0x43C10000` | 32 KiB | 8192 32-bit frame words |
 
-The control register map is authored in `hw/regs/pl_control.rdl`. Run `make regs` to regenerate the committed PS header, generated RTL register block, and HTML docs. The generated docs entry point is `docs/regs/pl_control/index.html`; `make regs-check` fails if committed generated artifacts are stale.
+The control register map is authored in `hw/regs/pl_control.rdl`. Run `make regs` to regenerate the committed PS header and RTL register block, plus local HTML docs under `build/docs/regs/pl_control/index.html`. Run `make regs-check` to fail if committed generated artifacts are stale.
 
 Current frame format is pixel-major: for each pixel index, output 0 through output 3 are stored as one `0x00RRGGBB` word each. The frame RAM capacity is `8192` words split into two `4096` word banks, matching the current configured frame size of `4 * 1024` pixels.
 

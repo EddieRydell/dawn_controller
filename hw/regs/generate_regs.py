@@ -12,21 +12,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RDL = REPO_ROOT / "hw" / "regs" / "pl_control.rdl"
 PS_HEADER = REPO_ROOT / "ps" / "app" / "pl_control.h"
 RTL_DIR = REPO_ROOT / "hw" / "rtl" / "generated"
-DOCS_DIR = REPO_ROOT / "docs" / "regs" / "pl_control"
+DOCS_DIR = REPO_ROOT / "build" / "docs" / "regs" / "pl_control"
 
 
 def run(cmd):
     subprocess.run(cmd, cwd=REPO_ROOT, check=True)
 
 
-def generate(out_root):
+def generate(out_root, include_docs=True):
     out_root.mkdir(parents=True, exist_ok=True)
     ps_header = out_root / "ps" / "app" / "pl_control.h"
     rtl_dir = out_root / "hw" / "rtl" / "generated"
-    docs_dir = out_root / "docs" / "regs" / "pl_control"
     ps_header.parent.mkdir(parents=True, exist_ok=True)
     rtl_dir.mkdir(parents=True, exist_ok=True)
-    docs_dir.parent.mkdir(parents=True, exist_ok=True)
 
     run(["peakrdl", "c-header", "-o", str(ps_header), str(RDL)])
     run([
@@ -48,6 +46,11 @@ def generate(out_root):
         text = sv.read_text()
         if not text.startswith("`timescale"):
             sv.write_text("`timescale 1ns / 1ps\n" + text, newline="")
+    if not include_docs:
+        return
+
+    docs_dir = out_root / "docs" / "regs" / "pl_control"
+    docs_dir.parent.mkdir(parents=True, exist_ok=True)
     run([
         "peakrdl",
         "html",
@@ -74,6 +77,7 @@ def copy_generated(src_root):
         shutil.copy2(path, RTL_DIR / path.name)
     if DOCS_DIR.exists():
         shutil.rmtree(DOCS_DIR)
+    DOCS_DIR.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src_root / "docs" / "regs" / "pl_control", DOCS_DIR)
 
 
@@ -99,7 +103,6 @@ def check_generated(src_root):
     if not PS_HEADER.exists() or not filecmp.cmp(src_root / "ps" / "app" / "pl_control.h", PS_HEADER, shallow=False):
         differences.append(str(PS_HEADER.relative_to(REPO_ROOT)))
     differences.extend(compare_dirs(src_root / "hw" / "rtl" / "generated", RTL_DIR))
-    differences.extend(compare_dirs(src_root / "docs" / "regs" / "pl_control", DOCS_DIR))
     return differences
 
 
@@ -111,7 +114,7 @@ def main():
     if args.check:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_root = Path(tmp)
-            generate(tmp_root)
+            generate(tmp_root, include_docs=False)
             differences = check_generated(tmp_root)
             if differences:
                 print("Generated register artifacts are stale:", file=sys.stderr)

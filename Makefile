@@ -20,7 +20,7 @@ SIM_DIR := build/xsim
 help:
 	@echo Common targets:
 	@echo   make hw      Build Vivado hardware and export XSA
-	@echo   make regs    Regenerate SystemRDL-derived software, RTL, and docs
+	@echo   make regs    Regenerate SystemRDL-derived software, RTL, and local docs
 	@echo   make regs-check  Check committed register artifacts are fresh
 	@echo   make rtl-check  Run fast Vivado Verilog syntax checks
 	@echo   make rtl-sim  Run focused WS281x consumer RTL simulation

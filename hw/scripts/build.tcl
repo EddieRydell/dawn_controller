@@ -28,6 +28,7 @@ update_compile_order -fileset sources_1
 
 source [file join $script_dir ps_bd.tcl]
 
+set_property synth_checkpoint_mode None [get_files donder_system.bd]
 generate_target all [get_files donder_system.bd]
 make_wrapper -files [get_files donder_system.bd] -top
 add_files -norecurse [file join $build_dir donder_controller.gen sources_1 bd donder_system hdl donder_system_wrapper.v]
