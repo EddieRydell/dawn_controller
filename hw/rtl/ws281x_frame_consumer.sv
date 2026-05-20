@@ -102,7 +102,7 @@ module ws281x_frame_consumer #(
     function automatic [FRAME_ADDR_WIDTH-1:0] frame_byte_addr(input [31:0] bank, input [31:0] pixel, input [31:0] output_num);
         logic [31:0] word_index;
         begin
-            word_index = (bank[0] ? FRAME_WORDS_PER_BANK : 32'h0000_0000) + (pixel * OUTPUT_COUNT) + output_num;
+            word_index = (bank[0] ? FRAME_WORDS_PER_BANK : 32'h0000_0000) + (output_num * PIXELS_PER_OUTPUT) + pixel;
             frame_byte_addr = word_index[FRAME_ADDR_WIDTH-3:0] << 2;
         end
     endfunction
@@ -151,7 +151,7 @@ module ws281x_frame_consumer #(
             for (idx = 0; idx < OUTPUT_COUNT; idx = idx + 1) begin
                 length = strand_pixel_count(idx);
                 if (idx < runtime_active_output_count && length != 32'h0000_0000) begin
-                    required = ((length - 32'd1) * OUTPUT_COUNT) + idx + 32'd1;
+                    required = (idx * PIXELS_PER_OUTPUT) + length;
                     if (required > required_frame_words) begin
                         required_frame_words = required;
                     end

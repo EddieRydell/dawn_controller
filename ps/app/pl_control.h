@@ -20,7 +20,7 @@ extern "C" {
 #define PL_CONTROL__VERSION__VALUE_bm 0xffffffff
 #define PL_CONTROL__VERSION__VALUE_bp 0
 #define PL_CONTROL__VERSION__VALUE_bw 32
-#define PL_CONTROL__VERSION__VALUE_reset 0x50000
+#define PL_CONTROL__VERSION__VALUE_reset 0x60000
 
 // reg - pl_control::CONTROL
 #define PL_CONTROL__CONTROL__RESERVED_bm 0x1

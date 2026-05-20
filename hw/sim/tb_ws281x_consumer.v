@@ -7,7 +7,7 @@ module tb_ws281x_consumer;
     localparam PIXELS_PER_OUTPUT = 2;
     localparam FRAME_WORDS = 16;
     localparam [31:0] PL_CONTROL_ID_VALUE = 32'h4546_504c;
-    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0005_0000;
+    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0006_0000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ID_OFFSET = 12'h000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_VERSION_OFFSET = 12'h004;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONTROL_OFFSET = 12'h008;
@@ -118,9 +118,9 @@ module tb_ws281x_consumer;
             frame_read_word = frame_araddr >> 2;
             frame_read_in_bank_word = frame_read_word % bank_words;
             if (frame_read_in_bank_word != 0
-                && frame_read_in_bank_word != 1
                 && frame_read_in_bank_word != 2
-                && frame_read_in_bank_word != 5) begin
+                && frame_read_in_bank_word != 3
+                && frame_read_in_bank_word != 4) begin
                 $fatal(1, "consumer read inactive runtime-config word %0d", frame_read_in_bank_word);
             end
         end
@@ -318,7 +318,7 @@ module tb_ws281x_consumer;
             ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0001_0203 + i);
         end
 
-        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (write_bank << 31) | 32'h0000_0006);
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (write_bank << 31) | 32'h0000_0005);
         ctl_read(PL_CONTROL_ACTIVE_BANK_OFFSET, read_data);
         if (read_data != write_bank) begin
             $fatal(1, "active bank is %08x expected %08x", read_data, write_bank);
@@ -353,7 +353,7 @@ module tb_ws281x_consumer;
             word_addr = (second_write_bank * bank_words) + i;
             ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0102_0304 + i);
         end
-        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (second_write_bank << 31) | 32'h0000_0006);
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (second_write_bank << 31) | 32'h0000_0005);
         ctl_read(PL_CONTROL_FRAME_COUNT_OFFSET, read_data);
         if (read_data != 32'h0000_0002) begin
             $fatal(1, "second valid commit left frame count %08x", read_data);
@@ -374,7 +374,7 @@ module tb_ws281x_consumer;
         end
 
         ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
-        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31) | 32'h0000_0006);
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31) | 32'h0000_0005);
         ctl_read(PL_CONTROL_STATUS_OFFSET, read_data);
         if ((read_data & PL_CONTROL_STATUS_COMMIT_REJECTED) == 0) begin
             $fatal(1, "invalid commit did not set commit rejected: %08x", read_data);

@@ -23,7 +23,7 @@ define collect_root_side_effects
 	$(POWERSHELL) -NoProfile -Command "$$dest = '$(SIDE_EFFECT_DIR)'; New-Item -ItemType Directory -Force $$dest | Out-Null; foreach ($$name in @('.Xil','NA','dfx_runtime.txt')) { if (Test-Path -LiteralPath $$name) { $$target = Join-Path $$dest $$name; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -LiteralPath $$target; Move-Item -Force -LiteralPath $$name -Destination $$dest } }"
 endef
 
-.PHONY: help all regs regs-check rtl-check rtl-sim hw ps boot run logs clean
+.PHONY: help all regs regs-check rtl-check rtl-sim hw ps boot run logs e131-send clean
 
 help:
 	@echo Common targets:
@@ -36,6 +36,7 @@ help:
 	@echo   make boot    Package deployable SD-card BOOT.BIN
 	@echo   make run     Program FPGA and run the controller app over JTAG
 	@echo   make logs PORT=COMx  Stream UART telemetry at BAUD=115200
+	@echo   make e131-send  Send deterministic E1.31 UDP to 192.168.7.2:5568
 	@echo   make all     Run hw, ps, and boot
 	@echo   make clean   Remove generated Xilinx output and root log clutter
 
@@ -87,6 +88,9 @@ run: $(PS_STAMP)
 
 logs:
 	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File ps/scripts/serial_logs.ps1 -Port "$(PORT)" -Baud $(BAUD)
+
+e131-send:
+	$(PYTHON) ps/tools/e131_send.py --dest-ip 192.168.7.2 --port 5568
 
 clean:
 	$(POWERSHELL) -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'build','.Xil','NA'"

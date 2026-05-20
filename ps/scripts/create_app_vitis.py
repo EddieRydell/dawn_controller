@@ -42,6 +42,11 @@ for domain_name in ("standalone", "zynq_fsbl"):
         " -O2 -g -fno-tree-loop-distribute-patterns",
     )
 
+mark("enable lwip")
+standalone_domain = platform.get_domain("standalone")
+if not any(lib.get("name") == "lwip220" for lib in standalone_domain.get_libs()):
+    standalone_domain.set_lib("lwip220")
+
 mark("silence generated fsbl warnings")
 fsbl_user_config = workspace / "donder_platform" / "zynq_fsbl" / "UserConfig.cmake"
 fsbl_config = fsbl_user_config.read_text()
@@ -67,6 +72,15 @@ app = client.create_app_component(
 
 mark("import app files")
 app.import_files(from_loc=str(repo_root / "ps" / "app"), dest_dir_in_cmp="src")
+
+mark("link lwip")
+app_cmake = workspace / "donder_controller" / "src" / "CMakeLists.txt"
+app_cmake_text = app_cmake.read_text()
+app_cmake_text = app_cmake_text.replace(
+    "collect(PROJECT_LIB_DEPS xilstandalone;xiltimer)",
+    "collect(PROJECT_LIB_DEPS xilstandalone;xiltimer;lwip220)",
+)
+app_cmake.write_text(app_cmake_text)
 
 mark("app build")
 app.build()

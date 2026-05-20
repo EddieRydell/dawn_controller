@@ -10,8 +10,8 @@ addrmap pl_control {
 
     reg {
         name = "VERSION";
-        desc = "Register contract version. Must read 0x00050000.";
-        field { sw = r; hw = na; reset = 32'h00050000; } value[31:0];
+        desc = "Register contract version. Must read 0x00060000.";
+        field { sw = r; hw = na; reset = 32'h00060000; } value[31:0];
     } VERSION @ 12'h004;
 
     reg {

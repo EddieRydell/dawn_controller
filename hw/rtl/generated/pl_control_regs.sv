@@ -880,7 +880,7 @@ module pl_control_regs (
             readback_data_var[31:0] = 32'h4546504c;
         end
         if(rd_mux_addr == 12'h4) begin
-            readback_data_var[31:0] = 32'h50000;
+            readback_data_var[31:0] = 32'h60000;
         end
         if(rd_mux_addr == 12'h8) begin
             readback_data_var[0] = field_storage.CONTROL.reserved.value;

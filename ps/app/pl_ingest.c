@@ -87,13 +87,13 @@ static uint32_t min_u32(uint32_t a, uint32_t b)
     return a < b ? a : b;
 }
 
-static uint32_t config_required_words(uint32_t active_count, const uint32_t lengths[4], uint32_t max_output_count)
+static uint32_t config_required_words(uint32_t active_count, const uint32_t lengths[4], uint32_t max_output_count, uint32_t max_pixels_per_output)
 {
     uint32_t required_words = 0u;
 
     for (uint32_t output = 0u; output < max_output_count && output < 4u; ++output) {
         if (output < active_count && lengths[output] > 0u) {
-            uint32_t required = ((lengths[output] - 1u) * max_output_count) + output + 1u;
+            uint32_t required = (output * max_pixels_per_output) + lengths[output];
             if (required > required_words) {
                 required_words = required;
             }
@@ -127,7 +127,8 @@ pl_ingest_result_t pl_ingest_get_config(pl_ingest_config_t *config)
     }
     config->required_words = config_required_words(config->effective_active_output_count,
                                                    config->effective_strand_pixel_count,
-                                                   config->max_output_count);
+                                                   config->max_output_count,
+                                                   config->max_pixels_per_output);
 
     return PL_INGEST_OK;
 }

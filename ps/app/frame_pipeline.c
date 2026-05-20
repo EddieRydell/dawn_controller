@@ -21,7 +21,7 @@ static uint32_t required_words_for(uint32_t active_count, const uint32_t lengths
 
     for (uint32_t output = 0u; output < DONDER_OUTPUT_COUNT; ++output) {
         if (output < active_count && lengths[output] > 0u) {
-            uint32_t required = ((lengths[output] - 1u) * DONDER_OUTPUT_COUNT) + output + 1u;
+            uint32_t required = (output * DONDER_PIXELS_PER_OUTPUT) + lengths[output];
             if (required > required_words) {
                 required_words = required;
             }
@@ -78,24 +78,44 @@ uint32_t *frame_pipeline_inactive_words(void)
     return g_frame_words[g_write_bank];
 }
 
-void frame_pipeline_generate_test_pattern(uint32_t frame_number)
+void frame_pipeline_clear_all(uint32_t rgb_word)
 {
-    uint32_t *words = frame_pipeline_inactive_words();
-
-    for (uint32_t word = 0u; word < g_required_words; ++word) {
-        words[word] = 0u;
-    }
-
-    for (uint32_t output = 0u; output < g_active_output_count; ++output) {
-        for (uint32_t pixel = 0u; pixel < g_strand_pixel_count[output]; ++pixel) {
-            uint32_t index = (pixel * DONDER_OUTPUT_COUNT) + output;
-            uint32_t phase = (pixel + frame_number + (output * 64u)) & 0xffu;
-            uint32_t r = phase;
-            uint32_t g = 255u - phase;
-            uint32_t b = (frame_number + output) & 0xffu;
-            words[index] = (r << 16) | (g << 8) | b;
+    rgb_word &= 0x00ffffffu;
+    for (uint32_t bank = 0u; bank < FRAME_BANKS; ++bank) {
+        for (uint32_t word = 0u; word < DONDER_WORDS_PER_FRAME; ++word) {
+            g_frame_words[bank][word] = rgb_word;
         }
     }
+}
+
+int frame_pipeline_write_linear_rgb(uint32_t first_pixel, const uint8_t *rgb_slots, uint32_t rgb_pixel_count)
+{
+    if (rgb_slots == 0) {
+        return -1;
+    }
+
+    for (uint32_t pixel = 0u; pixel < rgb_pixel_count; ++pixel) {
+        uint32_t linear_pixel = first_pixel + pixel;
+        uint32_t output = linear_pixel / DONDER_PIXELS_PER_OUTPUT;
+        uint32_t output_pixel = linear_pixel % DONDER_PIXELS_PER_OUTPUT;
+        uint32_t word_index;
+        uint32_t word;
+
+        if (output >= DONDER_OUTPUT_COUNT) {
+            break;
+        }
+
+        word_index = (output * DONDER_PIXELS_PER_OUTPUT) + output_pixel;
+        word = ((uint32_t)rgb_slots[(pixel * 3u) + 0u] << 16)
+             | ((uint32_t)rgb_slots[(pixel * 3u) + 1u] << 8)
+             | ((uint32_t)rgb_slots[(pixel * 3u) + 2u] << 0);
+
+        for (uint32_t bank = 0u; bank < FRAME_BANKS; ++bank) {
+            g_frame_words[bank][word_index] = word;
+        }
+    }
+
+    return 0;
 }
 
 int frame_pipeline_commit(void)
