@@ -115,27 +115,13 @@ make run
 make logs PORT=COMx
 ```
 
-On Windows with the tested USB-C adapter, the board link appears as `Ethernet 2` / `ASIX USB to Gigabit Ethernet Family Adapter`. If the alias differs, find it with `Get-NetAdapter`. To make the static host address persistent, run PowerShell as Administrator:
-
-```powershell
-Set-NetIPInterface -InterfaceAlias "Ethernet 2" -AddressFamily IPv4 -Dhcp Disabled
-New-NetIPAddress -InterfaceAlias "Ethernet 2" -IPAddress 192.168.7.1 -PrefixLength 24
-```
-
-If `192.168.7.1/24` already exists, only the `Set-NetIPInterface` command is needed. Verify the link before sending packets:
-
-```powershell
-Get-NetIPAddress -InterfaceAlias "Ethernet 2" -AddressFamily IPv4
-Test-Connection 192.168.7.2 -Count 2
-```
-
-Expected startup telemetry includes `net status=ready`, `ip=192.168.7.2`, and `udp_port=5568`. Runtime status is machine-readable:
+Runtime status is machine-readable:
 
 ```text
 e131_status link=... rx_packets=... rx_bytes=... e131_valid=... e131_rejected=... universes_seen=... frames_committed=... frames_dropped=... last_universe=... last_sequence=... last_error=...
 ```
 
-Send deterministic E1.31 from the host:
+Send E1.31 from the host:
 
 ```powershell
 make e131-send

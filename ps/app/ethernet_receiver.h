@@ -11,6 +11,14 @@ typedef struct {
     uint32_t universes_seen;
     uint32_t frames_committed;
     uint32_t frames_dropped;
+    uint32_t complete_frames;
+    uint32_t incomplete_sweeps;
+    uint32_t ignored_sources;
+    uint32_t sequence_anomalies;
+    uint32_t preview_rejects;
+    uint32_t sync_waits;
+    uint32_t sync_timeouts;
+    uint32_t blackouts;
     uint16_t last_universe;
     uint8_t last_sequence;
     const char *last_error;

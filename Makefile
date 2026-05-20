@@ -7,8 +7,9 @@ XELAB ?= xelab
 XSIM ?= xsim
 VITIS ?= vitis
 BOOTGEN ?= bootgen
+HOST_CC ?= gcc
 POWERSHELL ?= powershell
-PORT ?=
+PORT ?= COM4
 BAUD ?= 115200
 
 XSA := build/vivado/donder_controller.xsa
@@ -18,12 +19,13 @@ BOOT_BIN := build/sd/BOOT.BIN
 RTL_CHECK_DIR := build/rtl-check
 RTL_SIM_DIR := build/rtl-sim
 SIDE_EFFECT_DIR := build/tool-side-effects
+PS_HOST_TEST_EXE := build/ps-host-test/e131_host_tests.exe
 
 define collect_root_side_effects
 	$(POWERSHELL) -NoProfile -Command "$$dest = '$(SIDE_EFFECT_DIR)'; New-Item -ItemType Directory -Force $$dest | Out-Null; foreach ($$name in @('.Xil','NA','dfx_runtime.txt')) { if (Test-Path -LiteralPath $$name) { $$target = Join-Path $$dest $$name; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -LiteralPath $$target; Move-Item -Force -LiteralPath $$name -Destination $$dest } }"
 endef
 
-.PHONY: help all regs regs-check rtl-check rtl-sim hw ps boot run logs e131-send clean
+.PHONY: help all regs regs-check rtl-check rtl-sim hw ps ps-host-test boot run logs e131-send clean
 
 help:
 	@echo Common targets:
@@ -33,6 +35,7 @@ help:
 	@echo   make rtl-check  Run fast Vivado Verilog syntax checks
 	@echo   make rtl-sim  Run focused WS281x consumer RTL simulation
 	@echo   make ps      Build the bare-metal controller app
+	@echo   make ps-host-test  Build and run host-side PS protocol tests
 	@echo   make boot    Package deployable SD-card BOOT.BIN
 	@echo   make run     Program FPGA and run the controller app over JTAG
 	@echo   make logs PORT=COMx  Stream UART telemetry at BAUD=115200
@@ -70,6 +73,13 @@ $(XSA) $(BITSTREAM): hw/rtl/generated/pl_control_regs_pkg.sv hw/rtl/generated/pl
 	$(collect_root_side_effects)
 
 ps: $(PS_STAMP)
+
+ps-host-test: $(PS_HOST_TEST_EXE)
+	$(PS_HOST_TEST_EXE)
+
+$(PS_HOST_TEST_EXE): ps/tests/e131_host_tests.c ps/app/e131_parser.c ps/app/e131_parser.h ps/app/e131_receiver.c ps/app/e131_receiver.h ps/app/app_config.c ps/app/app_config.h ps/app/frame_pipeline.h Makefile
+	$(POWERSHELL) -NoProfile -Command "New-Item -ItemType Directory -Force 'build/ps-host-test' | Out-Null"
+	$(HOST_CC) -std=c99 -Wall -Wextra -Werror -Ips/app -o $(PS_HOST_TEST_EXE) ps/tests/e131_host_tests.c ps/app/e131_parser.c ps/app/e131_receiver.c ps/app/app_config.c
 
 $(PS_STAMP): $(XSA) $(BITSTREAM) $(wildcard ps/app/*.c) $(wildcard ps/app/*.h) ps/scripts/create_app_vitis.py Makefile | regs-check
 	$(POWERSHELL) -NoProfile -Command "New-Item -ItemType Directory -Force 'build/vitis' | Out-Null"

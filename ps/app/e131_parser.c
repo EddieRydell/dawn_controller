@@ -5,8 +5,11 @@
 #include "app_config.h"
 
 #define E131_MIN_PACKET_BYTES 126u
+#define E131_MIN_SYNC_PACKET_BYTES 49u
 #define E131_ROOT_VECTOR_DATA 0x00000004u
+#define E131_ROOT_VECTOR_EXTENDED 0x00000008u
 #define E131_FRAME_VECTOR_DATA 0x00000002u
+#define E131_FRAME_VECTOR_SYNC 0x00000001u
 #define E131_DMP_VECTOR_DATA 0x02u
 #define E131_DMP_ADDRESS_TYPE 0xa1u
 
@@ -31,6 +34,7 @@ const char *e131_parse_result_name(e131_parse_result_t result)
     case E131_PARSE_ACN_ID: return "acn_id";
     case E131_PARSE_ROOT_VECTOR: return "root_vector";
     case E131_PARSE_FRAME_VECTOR: return "frame_vector";
+    case E131_PARSE_SYNC_VECTOR: return "sync_vector";
     case E131_PARSE_DMP_VECTOR: return "dmp_vector";
     case E131_PARSE_DMP_ADDRESS: return "dmp_address";
     case E131_PARSE_PROP_COUNT: return "prop_count";
@@ -40,29 +44,58 @@ const char *e131_parse_result_name(e131_parse_result_t result)
     }
 }
 
+static e131_parse_result_t check_acn_id(const uint8_t *data, uint16_t length, uint16_t min_length)
+{
+    static const uint8_t acn_id[12] = {
+        'A', 'S', 'C', '-', 'E', '1', '.', '1', '7', 0x00u, 0x00u, 0x00u,
+    };
+
+    if (data == NULL || length < min_length) {
+        return E131_PARSE_SHORT;
+    }
+    for (uint32_t i = 0u; i < sizeof(acn_id); ++i) {
+        if (data[4u + i] != acn_id[i]) {
+            return E131_PARSE_ACN_ID;
+        }
+    }
+    return E131_PARSE_OK;
+}
+
+static void copy_cid(uint8_t dst[16], const uint8_t *src)
+{
+    for (uint32_t i = 0u; i < 16u; ++i) {
+        dst[i] = src[i];
+    }
+}
+
+static void copy_source_name(char dst[65], const uint8_t *src)
+{
+    for (uint32_t i = 0u; i < 64u; ++i) {
+        dst[i] = (char)src[i];
+    }
+    dst[64] = '\0';
+}
+
 e131_parse_result_t e131_parse_data_packet(const uint8_t *data,
                                            uint16_t length,
                                            uint16_t first_universe,
                                            uint32_t total_pixels,
                                            e131_data_packet_t *packet)
 {
-    static const uint8_t acn_id[12] = {
-        'A', 'S', 'C', '-', 'E', '1', '.', '1', '7', 0x00u, 0x00u, 0x00u,
-    };
     uint16_t prop_count;
     uint16_t universe;
     uint32_t universe_offset;
     uint32_t first_slot;
     uint32_t available_rgb_slots;
+    e131_parse_result_t acn_result;
 
-    if (data == NULL || packet == NULL || length < E131_MIN_PACKET_BYTES) {
+    if (packet == NULL) {
         return E131_PARSE_SHORT;
     }
 
-    for (uint32_t i = 0u; i < sizeof(acn_id); ++i) {
-        if (data[4u + i] != acn_id[i]) {
-            return E131_PARSE_ACN_ID;
-        }
+    acn_result = check_acn_id(data, length, E131_MIN_PACKET_BYTES);
+    if (acn_result != E131_PARSE_OK) {
+        return acn_result;
     }
     if (read_be32(&data[18]) != E131_ROOT_VECTOR_DATA) {
         return E131_PARSE_ROOT_VECTOR;
@@ -101,16 +134,47 @@ e131_parse_result_t e131_parse_data_packet(const uint8_t *data,
         return E131_PARSE_PROP_COUNT;
     }
 
+    copy_cid(packet->cid, &data[22]);
+    copy_source_name(packet->source_name, &data[44]);
+    packet->priority = data[108];
+    packet->sync_address = read_be16(&data[109]);
     packet->universe = universe;
     packet->sequence = data[111];
+    packet->options = data[112];
     packet->rgb_slots = &data[126];
     packet->rgb_slot_count = (uint16_t)available_rgb_slots;
     packet->first_linear_pixel = first_slot / 3u;
     packet->rgb_pixel_count = available_rgb_slots / 3u;
     if (packet->first_linear_pixel + packet->rgb_pixel_count > total_pixels) {
         packet->rgb_pixel_count = total_pixels - packet->first_linear_pixel;
-        packet->rgb_slot_count = (uint16_t)(packet->rgb_pixel_count * 3u);
     }
 
+    return E131_PARSE_OK;
+}
+
+e131_parse_result_t e131_parse_sync_packet(const uint8_t *data,
+                                           uint16_t length,
+                                           e131_sync_packet_t *packet)
+{
+    e131_parse_result_t acn_result;
+
+    if (packet == NULL) {
+        return E131_PARSE_SHORT;
+    }
+
+    acn_result = check_acn_id(data, length, E131_MIN_SYNC_PACKET_BYTES);
+    if (acn_result != E131_PARSE_OK) {
+        return acn_result;
+    }
+    if (read_be32(&data[18]) != E131_ROOT_VECTOR_EXTENDED) {
+        return E131_PARSE_ROOT_VECTOR;
+    }
+    if (read_be32(&data[40]) != E131_FRAME_VECTOR_SYNC) {
+        return E131_PARSE_SYNC_VECTOR;
+    }
+
+    copy_cid(packet->cid, &data[22]);
+    packet->sequence = data[44];
+    packet->sync_address = read_be16(&data[45]);
     return E131_PARSE_OK;
 }

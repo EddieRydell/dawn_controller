@@ -42,14 +42,22 @@ int main(void)
 
     frame_pipeline_init();
     const uint32_t startup_lengths[DONDER_OUTPUT_COUNT] = {
-        DONDER_PIXELS_PER_OUTPUT,
-        DONDER_PIXELS_PER_OUTPUT,
-        DONDER_PIXELS_PER_OUTPUT,
-        DONDER_PIXELS_PER_OUTPUT,
+        50u,
+        50u,
+        50u,
+        50u,
     };
     if (frame_pipeline_configure(DONDER_OUTPUT_COUNT, startup_lengths) != 0) {
         fatal("startup_configure", -1);
     }
+    xil_printf("strand_config active_outputs=%u lengths=[%u,%u,%u,%u] e131_pixels=%u e131_channels=%u\r\n",
+               (unsigned int)DONDER_OUTPUT_COUNT,
+               (unsigned int)startup_lengths[0],
+               (unsigned int)startup_lengths[1],
+               (unsigned int)startup_lengths[2],
+               (unsigned int)startup_lengths[3],
+               (unsigned int)frame_pipeline_active_pixel_count(),
+               (unsigned int)(frame_pipeline_active_pixel_count() * 3u));
     frame_pipeline_clear_all(0u);
     if (frame_pipeline_commit() != 0) {
         fatal("initial_frame_commit", -1);
