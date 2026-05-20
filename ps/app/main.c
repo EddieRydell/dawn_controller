@@ -17,6 +17,8 @@ static void fatal(const char *message, int code)
 int main(void)
 {
     uint32_t frame_number = 0u;
+    uint32_t accepted_frames = 0u;
+    uint32_t dropped_frames = 0u;
 
     xil_printf("\r\ndonder controller starting\r\n");
     xil_printf("outputs=%lu pixels_per_output=%lu frame_words=%lu e131_port=%u first_universe=%u\r\n",
@@ -41,6 +43,7 @@ int main(void)
     if (frame_pipeline_commit() != 0) {
         fatal("initial_frame_commit", -1);
     }
+    accepted_frames++;
     frame_number++;
 
     pl_ingest_result_t consumer_result = pl_ingest_enable_consumer();
@@ -50,9 +53,29 @@ int main(void)
     xil_printf("foundation ready\r\n");
 
     while (1) {
+        int commit_result;
+
         frame_pipeline_generate_test_pattern(frame_number);
-        if (frame_pipeline_commit() != 0) {
+        commit_result = frame_pipeline_commit();
+        if (commit_result == 0) {
+            accepted_frames++;
+        } else if (commit_result > 0) {
+            dropped_frames++;
+        } else {
             fatal("frame_commit", -1);
+        }
+
+        if (((accepted_frames + dropped_frames) % 100u) == 0u) {
+            pl_ingest_snapshot_t snapshot;
+            pl_ingest_snapshot(&snapshot);
+            xil_printf("frames accepted=%lu dropped=%lu pl_dropped=%lu rejected=%lu write_valid=%lu busy_bank=0x%08lx consumer_frames=%lu\r\n",
+                       (unsigned long)accepted_frames,
+                       (unsigned long)dropped_frames,
+                       (unsigned long)snapshot.frame_dropped,
+                       (unsigned long)snapshot.frame_rejected,
+                       (unsigned long)snapshot.write_bank_valid,
+                       (unsigned long)snapshot.busy_bank,
+                       (unsigned long)snapshot.consumer_frame_count);
         }
 
         frame_number++;

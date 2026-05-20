@@ -20,7 +20,7 @@ extern "C" {
 #define PL_CONTROL__VERSION__VALUE_bm 0xffffffff
 #define PL_CONTROL__VERSION__VALUE_bp 0
 #define PL_CONTROL__VERSION__VALUE_bw 32
-#define PL_CONTROL__VERSION__VALUE_reset 0x30000
+#define PL_CONTROL__VERSION__VALUE_reset 0x40000
 
 // reg - pl_control::CONTROL
 #define PL_CONTROL__CONTROL__RESERVED_bm 0x1
@@ -45,6 +45,10 @@ extern "C" {
 #define PL_CONTROL__STATUS__CONSUMER_ERROR_bp 2
 #define PL_CONTROL__STATUS__CONSUMER_ERROR_bw 1
 #define PL_CONTROL__STATUS__CONSUMER_ERROR_reset 0x0
+#define PL_CONTROL__STATUS__COMMIT_REJECTED_bm 0x8
+#define PL_CONTROL__STATUS__COMMIT_REJECTED_bp 3
+#define PL_CONTROL__STATUS__COMMIT_REJECTED_bw 1
+#define PL_CONTROL__STATUS__COMMIT_REJECTED_reset 0x0
 
 // reg - pl_control::PIN_OUT
 #define PL_CONTROL__PIN_OUT__VALUE_bm 0xffffffff
@@ -198,6 +202,36 @@ extern "C" {
 #define PL_CONTROL__CONSUMER_DEBUG__VALUE_bw 32
 #define PL_CONTROL__CONSUMER_DEBUG__VALUE_reset 0x0
 
+// reg - pl_control::WRITE_BANK_VALID
+#define PL_CONTROL__WRITE_BANK_VALID__VALUE_bm 0x1
+#define PL_CONTROL__WRITE_BANK_VALID__VALUE_bp 0
+#define PL_CONTROL__WRITE_BANK_VALID__VALUE_bw 1
+#define PL_CONTROL__WRITE_BANK_VALID__VALUE_reset 0x1
+
+// reg - pl_control::BUSY_BANK
+#define PL_CONTROL__BUSY_BANK__VALUE_bm 0xffffffff
+#define PL_CONTROL__BUSY_BANK__VALUE_bp 0
+#define PL_CONTROL__BUSY_BANK__VALUE_bw 32
+#define PL_CONTROL__BUSY_BANK__VALUE_reset 0xffffffff
+
+// reg - pl_control::FRAME_DROPPED
+#define PL_CONTROL__FRAME_DROPPED__VALUE_bm 0xffffffff
+#define PL_CONTROL__FRAME_DROPPED__VALUE_bp 0
+#define PL_CONTROL__FRAME_DROPPED__VALUE_bw 32
+#define PL_CONTROL__FRAME_DROPPED__VALUE_reset 0x0
+
+// reg - pl_control::FRAME_REJECTED
+#define PL_CONTROL__FRAME_REJECTED__VALUE_bm 0xffffffff
+#define PL_CONTROL__FRAME_REJECTED__VALUE_bp 0
+#define PL_CONTROL__FRAME_REJECTED__VALUE_bw 32
+#define PL_CONTROL__FRAME_REJECTED__VALUE_reset 0x0
+
+// reg - pl_control::FRAME_DROP_NOTIFY
+#define PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bm 0x1
+#define PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bp 0
+#define PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bw 1
+#define PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_reset 0x0
+
 // addrmap - pl_control
 typedef struct __attribute__ ((__packed__)) {
     uint32_t ID;
@@ -227,10 +261,15 @@ typedef struct __attribute__ ((__packed__)) {
     uint32_t WS281X_OUTPUT_COUNT;
     uint32_t WS281X_PIXELS_PER_OUTPUT;
     uint32_t CONSUMER_DEBUG;
+    uint32_t WRITE_BANK_VALID;
+    uint32_t BUSY_BANK;
+    uint32_t FRAME_DROPPED;
+    uint32_t FRAME_REJECTED;
+    uint32_t FRAME_DROP_NOTIFY;
 } pl_control_t;
 
 
-static_assert(sizeof(pl_control_t) == 0x6c, "Packing error");
+static_assert(sizeof(pl_control_t) == 0x80, "Packing error");
 
 #ifdef __cplusplus
 }

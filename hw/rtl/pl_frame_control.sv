@@ -61,6 +61,7 @@ module pl_frame_control #(
     input  wire [31:0]                consumer_frame_count,
     input  wire [31:0]                consumer_error_count,
     input  wire [31:0]                consumer_debug,
+    input  wire [31:0]                consumer_active_bank,
 
     output wire [31:0]                active_bank,
     output wire [31:0]                committed_words,
@@ -72,7 +73,9 @@ module pl_frame_control #(
     localparam [31:0] STATUS_READY = 32'h0000_0001;
     localparam [31:0] STATUS_OVERFLOW = 32'h0000_0002;
     localparam [31:0] STATUS_CONSUMER_ERROR = 32'h0000_0004;
+    localparam [31:0] STATUS_COMMIT_REJECTED = 32'h0000_0008;
     localparam [31:0] FRAME_WORDS_PER_BANK = FRAME_WORDS / 2;
+    localparam [31:0] NO_BUSY_BANK = 32'hffff_ffff;
 
     pl_control__in_t hwif_in;
     pl_control__out_t hwif_out;
@@ -86,6 +89,8 @@ module pl_frame_control #(
     logic [31:0] staged_first_frame_word_reg;
     logic [31:0] staged_last_frame_word_reg;
     logic [31:0] error_count_reg;
+    logic [31:0] frame_dropped_reg;
+    logic [31:0] frame_rejected_reg;
     logic [31:0] active_bank_reg;
     logic [31:0] frame_sequence_reg;
     logic consumer_error_sticky_reg;
@@ -95,10 +100,15 @@ module pl_frame_control #(
     logic consumer_reset_swmod_q;
     logic first_frame_word_swmod_q;
     logic last_frame_word_swmod_q;
+    logic frame_drop_notify_swmod_q;
 
     wire [31:0] commit_value;
+    wire [31:0] write_bank_value;
+    wire write_bank_valid_value;
 
     assign commit_value = {hwif_out.FRAME_COMMIT.bank.value, hwif_out.FRAME_COMMIT.word_count.value};
+    assign write_bank_value = active_bank_reg ^ 32'h0000_0001;
+    assign write_bank_valid_value = consumer_active_bank == NO_BUSY_BANK || consumer_active_bank != write_bank_value;
     assign consumer_enable = hwif_out.CONSUMER_CONTROL.enable.value;
     assign active_bank = active_bank_reg;
     assign committed_words = committed_words_reg;
@@ -107,6 +117,7 @@ module pl_frame_control #(
     assign hwif_in.STATUS.ready.next = status_reg[0];
     assign hwif_in.STATUS.overflow.next = status_reg[1];
     assign hwif_in.STATUS.consumer_error.next = status_reg[2];
+    assign hwif_in.STATUS.commit_rejected.next = status_reg[3];
     assign hwif_in.PIN_OUT.value.next = committed_first_frame_word_reg;
     assign hwif_in.COUNTER.value.next = counter_reg;
     assign hwif_in.FRAME_CAPACITY.value.next = FRAME_WORDS;
@@ -117,7 +128,7 @@ module pl_frame_control #(
     assign hwif_in.ERROR_COUNT.value.next = error_count_reg;
     assign hwif_in.FRAME_BANK_WORDS.value.next = FRAME_WORDS_PER_BANK;
     assign hwif_in.ACTIVE_BANK.value.next = active_bank_reg;
-    assign hwif_in.WRITE_BANK.value.next = active_bank_reg ^ 32'h0000_0001;
+    assign hwif_in.WRITE_BANK.value.next = write_bank_value;
     assign hwif_in.FRAME_SEQUENCE.value.next = frame_sequence_reg;
     assign hwif_in.CONSUMER_STATUS.enabled.next = consumer_enable;
     assign hwif_in.CONSUMER_STATUS.busy.next = consumer_busy;
@@ -127,6 +138,10 @@ module pl_frame_control #(
     assign hwif_in.CONSUMER_FRAME_COUNT.value.next = consumer_frame_count;
     assign hwif_in.CONSUMER_ERROR_COUNT.value.next = consumer_error_count;
     assign hwif_in.CONSUMER_DEBUG.value.next = consumer_debug;
+    assign hwif_in.WRITE_BANK_VALID.value.next = write_bank_valid_value;
+    assign hwif_in.BUSY_BANK.value.next = consumer_active_bank;
+    assign hwif_in.FRAME_DROPPED.value.next = frame_dropped_reg;
+    assign hwif_in.FRAME_REJECTED.value.next = frame_rejected_reg;
 
     pl_control_regs regs (
         .clk(aclk),
@@ -165,6 +180,8 @@ module pl_frame_control #(
             staged_first_frame_word_reg <= 32'h0000_0000;
             staged_last_frame_word_reg <= 32'h0000_0000;
             error_count_reg <= 32'h0000_0000;
+            frame_dropped_reg <= 32'h0000_0000;
+            frame_rejected_reg <= 32'h0000_0000;
             active_bank_reg <= 32'h0000_0000;
             frame_sequence_reg <= 32'h0000_0000;
             consumer_error_sticky_reg <= 1'b0;
@@ -173,6 +190,7 @@ module pl_frame_control #(
             consumer_reset_swmod_q <= 1'b0;
             first_frame_word_swmod_q <= 1'b0;
             last_frame_word_swmod_q <= 1'b0;
+            frame_drop_notify_swmod_q <= 1'b0;
             consumer_reset_pulse <= 1'b0;
         end else begin
             counter_reg <= counter_reg + 32'd1;
@@ -183,6 +201,7 @@ module pl_frame_control #(
             consumer_reset_swmod_q <= hwif_out.CONSUMER_CONTROL.reset_fsm.swmod;
             first_frame_word_swmod_q <= hwif_out.FIRST_FRAME_WORD.value.swmod;
             last_frame_word_swmod_q <= hwif_out.LAST_FRAME_WORD.value.swmod;
+            frame_drop_notify_swmod_q <= hwif_out.FRAME_DROP_NOTIFY.value.swmod;
 
             if (first_frame_word_swmod_q) begin
                 staged_first_frame_word_reg <= hwif_out.FIRST_FRAME_WORD.value.value;
@@ -206,7 +225,9 @@ module pl_frame_control #(
             end
 
             if (frame_commit_swmod_q) begin
-                if (commit_value[30:0] <= FRAME_WORDS_PER_BANK) begin
+                if (commit_value[30:0] <= FRAME_WORDS_PER_BANK
+                    && commit_value[31] == write_bank_value[0]
+                    && write_bank_valid_value) begin
                     frame_count_reg <= frame_count_reg + 32'd1;
                     frame_sequence_reg <= frame_sequence_reg + 32'd1;
                     active_bank_reg <= {31'h0000_0000, commit_value[31]};
@@ -214,9 +235,18 @@ module pl_frame_control #(
                     committed_first_frame_word_reg <= staged_first_frame_word_reg;
                     committed_last_frame_word_reg <= staged_last_frame_word_reg;
                 end else begin
-                    status_reg <= STATUS_READY | STATUS_OVERFLOW;
+                    status_reg <= commit_value[30:0] > FRAME_WORDS_PER_BANK
+                        ? (STATUS_READY | STATUS_OVERFLOW)
+                        : (STATUS_READY | STATUS_COMMIT_REJECTED);
                     error_count_reg <= error_count_reg + 32'd1;
+                    if (commit_value[30:0] <= FRAME_WORDS_PER_BANK) begin
+                        frame_rejected_reg <= frame_rejected_reg + 32'd1;
+                    end
                 end
+            end
+
+            if (frame_drop_notify_swmod_q && hwif_out.FRAME_DROP_NOTIFY.value.value) begin
+                frame_dropped_reg <= frame_dropped_reg + 32'd1;
             end
         end
     end

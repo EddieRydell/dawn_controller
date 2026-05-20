@@ -16,6 +16,7 @@ typedef enum {
     PL_INGEST_COMMIT_FAILED = -7,
     PL_INGEST_CONSUMER_FAILED = -8,
     PL_INGEST_BAD_ARGUMENT = -9,
+    PL_INGEST_NO_FREE_BANK = -10,
 } pl_ingest_result_t;
 
 typedef struct {
@@ -26,10 +27,14 @@ typedef struct {
     uint32_t bank_words;
     uint32_t active_bank;
     uint32_t write_bank;
+    uint32_t write_bank_valid;
+    uint32_t busy_bank;
     uint32_t frame_sequence;
     uint32_t frame_count;
     uint32_t committed_words;
     uint32_t error_count;
+    uint32_t frame_dropped;
+    uint32_t frame_rejected;
     uint32_t consumer_status;
     uint32_t consumer_sequence;
     uint32_t consumer_frame_count;

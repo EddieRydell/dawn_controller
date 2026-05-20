@@ -72,6 +72,7 @@ module ws281x_controller_core #(
     wire [31:0] consumer_sequence;
     wire [31:0] consumer_frame_count;
     wire [31:0] consumer_error_count;
+    wire [31:0] consumer_active_bank;
     wire [31:0] consumer_debug;
 
     pl_frame_control #(
@@ -108,6 +109,7 @@ module ws281x_controller_core #(
         .consumer_frame_count(consumer_frame_count),
         .consumer_error_count(consumer_error_count),
         .consumer_debug(consumer_debug),
+        .consumer_active_bank(consumer_active_bank),
         .active_bank(active_bank),
         .committed_words(committed_words),
         .frame_sequence(frame_sequence)
@@ -134,6 +136,7 @@ module ws281x_controller_core #(
         .consumer_sequence(consumer_sequence),
         .consumer_frame_count(consumer_frame_count),
         .consumer_error_count(consumer_error_count),
+        .consumer_active_bank(consumer_active_bank),
         .consumer_debug(consumer_debug),
         .ws281x_data(ws281x_data),
         .m_frame_araddr(m_frame_araddr),

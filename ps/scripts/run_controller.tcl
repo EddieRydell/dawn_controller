@@ -108,6 +108,8 @@ print_reg $pl_control_base 0x018 FRAME_CAPACITY
 print_reg $pl_control_base 0x038 FRAME_BANK_WORDS
 print_reg $pl_control_base 0x03c ACTIVE_BANK
 print_reg $pl_control_base 0x040 WRITE_BANK
+print_reg $pl_control_base 0x06c WRITE_BANK_VALID
+print_reg $pl_control_base 0x070 BUSY_BANK
 print_reg $pl_frame_base 0x000 FRAME_WORD0
 if {$core_id != 0x4546504c} {
     error [format "Unexpected PL core ID: 0x%08x" $core_id]
@@ -139,6 +141,10 @@ print_reg $pl_control_base 0x05c WS281X_BIT_RATE
 print_reg $pl_control_base 0x060 WS281X_OUTPUT_COUNT
 print_reg $pl_control_base 0x064 WS281X_PIXELS_PER_OUTPUT
 print_reg $pl_control_base 0x068 CONSUMER_DEBUG
+print_reg $pl_control_base 0x06c WRITE_BANK_VALID
+print_reg $pl_control_base 0x070 BUSY_BANK
+print_reg $pl_control_base 0x074 FRAME_DROPPED
+print_reg $pl_control_base 0x078 FRAME_REJECTED
 print_reg $pl_control_base 0x00c STATUS
 print_frame_word $pl_frame_base $bank_words $active_bank 0 ACTIVE_FRAME_WORD0
 

@@ -6,7 +6,7 @@ package pl_control_regs_pkg;
 
     localparam PL_CONTROL_REGS_DATA_WIDTH = 32;
     localparam PL_CONTROL_REGS_MIN_ADDR_WIDTH = 12;
-    localparam PL_CONTROL_REGS_SIZE = 'h6c;
+    localparam PL_CONTROL_REGS_SIZE = 'h80;
 
     typedef struct {
         logic next;
@@ -21,9 +21,14 @@ package pl_control_regs_pkg;
     } pl_control__STATUS__consumer_error__in_t;
 
     typedef struct {
+        logic next;
+    } pl_control__STATUS__commit_rejected__in_t;
+
+    typedef struct {
         pl_control__STATUS__ready__in_t ready;
         pl_control__STATUS__overflow__in_t overflow;
         pl_control__STATUS__consumer_error__in_t consumer_error;
+        pl_control__STATUS__commit_rejected__in_t commit_rejected;
     } pl_control__STATUS__in_t;
 
     typedef struct {
@@ -178,6 +183,38 @@ package pl_control_regs_pkg;
     } pl_control__CONSUMER_DEBUG__in_t;
 
     typedef struct {
+        logic next;
+    } pl_control__WRITE_BANK_VALID__value__in_t;
+
+    typedef struct {
+        pl_control__WRITE_BANK_VALID__value__in_t value;
+    } pl_control__WRITE_BANK_VALID__in_t;
+
+    typedef struct {
+        logic [31:0] next;
+    } pl_control__BUSY_BANK__value__in_t;
+
+    typedef struct {
+        pl_control__BUSY_BANK__value__in_t value;
+    } pl_control__BUSY_BANK__in_t;
+
+    typedef struct {
+        logic [31:0] next;
+    } pl_control__FRAME_DROPPED__value__in_t;
+
+    typedef struct {
+        pl_control__FRAME_DROPPED__value__in_t value;
+    } pl_control__FRAME_DROPPED__in_t;
+
+    typedef struct {
+        logic [31:0] next;
+    } pl_control__FRAME_REJECTED__value__in_t;
+
+    typedef struct {
+        pl_control__FRAME_REJECTED__value__in_t value;
+    } pl_control__FRAME_REJECTED__in_t;
+
+    typedef struct {
         pl_control__STATUS__in_t STATUS;
         pl_control__PIN_OUT__in_t PIN_OUT;
         pl_control__COUNTER__in_t COUNTER;
@@ -196,6 +233,10 @@ package pl_control_regs_pkg;
         pl_control__CONSUMER_FRAME_COUNT__in_t CONSUMER_FRAME_COUNT;
         pl_control__CONSUMER_ERROR_COUNT__in_t CONSUMER_ERROR_COUNT;
         pl_control__CONSUMER_DEBUG__in_t CONSUMER_DEBUG;
+        pl_control__WRITE_BANK_VALID__in_t WRITE_BANK_VALID;
+        pl_control__BUSY_BANK__in_t BUSY_BANK;
+        pl_control__FRAME_DROPPED__in_t FRAME_DROPPED;
+        pl_control__FRAME_REJECTED__in_t FRAME_REJECTED;
     } pl_control__in_t;
 
     typedef struct {
@@ -269,11 +310,21 @@ package pl_control_regs_pkg;
     } pl_control__CONSUMER_CONTROL__out_t;
 
     typedef struct {
+        logic value;
+        logic swmod;
+    } pl_control__FRAME_DROP_NOTIFY__value__out_t;
+
+    typedef struct {
+        pl_control__FRAME_DROP_NOTIFY__value__out_t value;
+    } pl_control__FRAME_DROP_NOTIFY__out_t;
+
+    typedef struct {
         pl_control__CONTROL__out_t CONTROL;
         pl_control__PIN_OUT__out_t PIN_OUT;
         pl_control__FRAME_COMMIT__out_t FRAME_COMMIT;
         pl_control__FIRST_FRAME_WORD__out_t FIRST_FRAME_WORD;
         pl_control__LAST_FRAME_WORD__out_t LAST_FRAME_WORD;
         pl_control__CONSUMER_CONTROL__out_t CONSUMER_CONTROL;
+        pl_control__FRAME_DROP_NOTIFY__out_t FRAME_DROP_NOTIFY;
     } pl_control__out_t;
 endpackage

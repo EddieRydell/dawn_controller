@@ -40,7 +40,12 @@ void frame_pipeline_generate_test_pattern(uint32_t frame_number)
 
 int frame_pipeline_commit(void)
 {
-    if (pl_ingest_write_frame(frame_pipeline_inactive_words(), DONDER_WORDS_PER_FRAME) != PL_INGEST_OK) {
+    pl_ingest_result_t result = pl_ingest_write_frame(frame_pipeline_inactive_words(), DONDER_WORDS_PER_FRAME);
+
+    if (result == PL_INGEST_NO_FREE_BANK) {
+        return 1;
+    }
+    if (result != PL_INGEST_OK) {
         return -1;
     }
 

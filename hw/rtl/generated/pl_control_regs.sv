@@ -252,6 +252,11 @@ module pl_control_regs (
         logic WS281X_OUTPUT_COUNT;
         logic WS281X_PIXELS_PER_OUTPUT;
         logic CONSUMER_DEBUG;
+        logic WRITE_BANK_VALID;
+        logic BUSY_BANK;
+        logic FRAME_DROPPED;
+        logic FRAME_REJECTED;
+        logic FRAME_DROP_NOTIFY;
     } decoded_reg_strb_t;
     decoded_reg_strb_t decoded_reg_strb;
     logic decoded_err;
@@ -292,6 +297,11 @@ module pl_control_regs (
         decoded_reg_strb.WS281X_OUTPUT_COUNT = cpuif_req_masked & (cpuif_addr == 12'h60) & !cpuif_req_is_wr;
         decoded_reg_strb.WS281X_PIXELS_PER_OUTPUT = cpuif_req_masked & (cpuif_addr == 12'h64) & !cpuif_req_is_wr;
         decoded_reg_strb.CONSUMER_DEBUG = cpuif_req_masked & (cpuif_addr == 12'h68) & !cpuif_req_is_wr;
+        decoded_reg_strb.WRITE_BANK_VALID = cpuif_req_masked & (cpuif_addr == 12'h6c) & !cpuif_req_is_wr;
+        decoded_reg_strb.BUSY_BANK = cpuif_req_masked & (cpuif_addr == 12'h70) & !cpuif_req_is_wr;
+        decoded_reg_strb.FRAME_DROPPED = cpuif_req_masked & (cpuif_addr == 12'h74) & !cpuif_req_is_wr;
+        decoded_reg_strb.FRAME_REJECTED = cpuif_req_masked & (cpuif_addr == 12'h78) & !cpuif_req_is_wr;
+        decoded_reg_strb.FRAME_DROP_NOTIFY = cpuif_req_masked & (cpuif_addr == 12'h7c) & cpuif_req_is_wr;
         decoded_err = '0;
     end
 
@@ -354,6 +364,12 @@ module pl_control_regs (
                 logic load_next;
             } reset_fsm;
         } CONSUMER_CONTROL;
+        struct {
+            struct {
+                logic next;
+                logic load_next;
+            } value;
+        } FRAME_DROP_NOTIFY;
     } field_combo_t;
     field_combo_t field_combo;
 
@@ -397,6 +413,11 @@ module pl_control_regs (
                 logic value;
             } reset_fsm;
         } CONSUMER_CONTROL;
+        struct {
+            struct {
+                logic value;
+            } value;
+        } FRAME_DROP_NOTIFY;
     } field_storage_t;
     field_storage_t field_storage;
 
@@ -623,6 +644,30 @@ module pl_control_regs (
     end
     assign hwif_out.CONSUMER_CONTROL.reset_fsm.value = field_storage.CONSUMER_CONTROL.reset_fsm.value;
     assign hwif_out.CONSUMER_CONTROL.reset_fsm.swmod = decoded_reg_strb.CONSUMER_CONTROL && decoded_req_is_wr && |(decoded_wr_biten[1:1]);
+    // Field: pl_control.FRAME_DROP_NOTIFY.value
+    always_comb begin
+        automatic logic [0:0] next_c;
+        automatic logic load_next_c;
+        next_c = field_storage.FRAME_DROP_NOTIFY.value.value;
+        load_next_c = '0;
+        if(decoded_reg_strb.FRAME_DROP_NOTIFY && decoded_req_is_wr) begin // SW write
+            next_c = (field_storage.FRAME_DROP_NOTIFY.value.value & ~decoded_wr_biten[0:0]) | (decoded_wr_data[0:0] & decoded_wr_biten[0:0]);
+            load_next_c = '1;
+        end
+        field_combo.FRAME_DROP_NOTIFY.value.next = next_c;
+        field_combo.FRAME_DROP_NOTIFY.value.load_next = load_next_c;
+    end
+    always_ff @(posedge clk) begin
+        if(~rst_n) begin
+            field_storage.FRAME_DROP_NOTIFY.value.value <= 1'h0;
+        end else begin
+            if(field_combo.FRAME_DROP_NOTIFY.value.load_next) begin
+                field_storage.FRAME_DROP_NOTIFY.value.value <= field_combo.FRAME_DROP_NOTIFY.value.next;
+            end
+        end
+    end
+    assign hwif_out.FRAME_DROP_NOTIFY.value.value = field_storage.FRAME_DROP_NOTIFY.value.value;
+    assign hwif_out.FRAME_DROP_NOTIFY.value.swmod = decoded_reg_strb.FRAME_DROP_NOTIFY && decoded_req_is_wr && |(decoded_wr_biten[0:0]);
 
     //--------------------------------------------------------------------------
     // Write response
@@ -648,7 +693,7 @@ module pl_control_regs (
             readback_data_var[31:0] = 32'h4546504c;
         end
         if(rd_mux_addr == 12'h4) begin
-            readback_data_var[31:0] = 32'h30000;
+            readback_data_var[31:0] = 32'h40000;
         end
         if(rd_mux_addr == 12'h8) begin
             readback_data_var[0] = field_storage.CONTROL.reserved.value;
@@ -658,6 +703,7 @@ module pl_control_regs (
             readback_data_var[0] = hwif_in.STATUS.ready.next;
             readback_data_var[1] = hwif_in.STATUS.overflow.next;
             readback_data_var[2] = hwif_in.STATUS.consumer_error.next;
+            readback_data_var[3] = hwif_in.STATUS.commit_rejected.next;
         end
         if(rd_mux_addr == 12'h10) begin
             readback_data_var[31:0] = field_storage.PIN_OUT.value.value;
@@ -725,6 +771,18 @@ module pl_control_regs (
         end
         if(rd_mux_addr == 12'h68) begin
             readback_data_var[31:0] = hwif_in.CONSUMER_DEBUG.value.next;
+        end
+        if(rd_mux_addr == 12'h6c) begin
+            readback_data_var[0] = hwif_in.WRITE_BANK_VALID.value.next;
+        end
+        if(rd_mux_addr == 12'h70) begin
+            readback_data_var[31:0] = hwif_in.BUSY_BANK.value.next;
+        end
+        if(rd_mux_addr == 12'h74) begin
+            readback_data_var[31:0] = hwif_in.FRAME_DROPPED.value.next;
+        end
+        if(rd_mux_addr == 12'h78) begin
+            readback_data_var[31:0] = hwif_in.FRAME_REJECTED.value.next;
         end
         readback_data = readback_data_var;
         readback_done = decoded_req & ~decoded_req_is_wr;

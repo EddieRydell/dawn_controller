@@ -23,6 +23,7 @@ module ws281x_frame_consumer #(
     output logic [31:0]               consumer_sequence,
     output logic [31:0]               consumer_frame_count,
     output logic [31:0]               consumer_error_count,
+    output logic [31:0]               consumer_active_bank,
     output wire [31:0]                consumer_debug,
 
     output wire [OUTPUT_COUNT-1:0]    ws281x_data,
@@ -42,6 +43,7 @@ module ws281x_frame_consumer #(
     localparam integer WS_T0H_CYCLES = 35;
     localparam integer WS_T1H_CYCLES = 70;
     localparam integer WS_RESET_CYCLES = 28000;
+    localparam [31:0] NO_BUSY_BANK = 32'hffff_ffff;
 
     localparam [2:0] TX_IDLE = 3'd0;
     localparam [2:0] TX_LOAD_FIRST = 3'd1;
@@ -124,6 +126,7 @@ module ws281x_frame_consumer #(
             consumer_sequence <= 32'h0000_0000;
             consumer_frame_count <= 32'h0000_0000;
             consumer_error_count <= 32'h0000_0000;
+            consumer_active_bank <= NO_BUSY_BANK;
             for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
                 current_pixel_reg[output_index] <= 32'h0000_0000;
                 next_pixel_reg[output_index] <= 32'h0000_0000;
@@ -137,12 +140,14 @@ module ws281x_frame_consumer #(
                 m_frame_arvalid <= 1'b0;
                 next_pixel_valid_reg <= 1'b0;
                 ws281x_data_reg <= {OUTPUT_COUNT{1'b0}};
+                consumer_active_bank <= NO_BUSY_BANK;
             end
 
             if (tx_state_reg == TX_IDLE && enable && frame_sequence != consumer_sequence) begin
                 if (committed_words >= FRAME_WORDS_REQUIRED) begin
                     tx_sequence_reg <= frame_sequence;
                     tx_active_bank_reg <= active_bank;
+                    consumer_active_bank <= active_bank;
                     pixel_index_reg <= 32'h0000_0000;
                     read_pixel_index_reg <= 32'h0000_0000;
                     read_output_reg <= 32'h0000_0000;
@@ -257,6 +262,7 @@ module ws281x_frame_consumer #(
                 if (reset_cycle_reg == WS_RESET_CYCLES - 1) begin
                     consumer_sequence <= tx_sequence_reg;
                     consumer_frame_count <= consumer_frame_count + 32'd1;
+                    consumer_active_bank <= NO_BUSY_BANK;
                     tx_state_reg <= TX_IDLE;
                 end else begin
                     reset_cycle_reg <= reset_cycle_reg + 32'd1;
@@ -266,6 +272,7 @@ module ws281x_frame_consumer #(
                 ws281x_data_reg <= {OUTPUT_COUNT{1'b0}};
                 m_frame_arvalid <= 1'b0;
                 rd_state_reg <= RD_IDLE;
+                consumer_active_bank <= NO_BUSY_BANK;
                 tx_state_reg <= TX_IDLE;
             end
             default: begin

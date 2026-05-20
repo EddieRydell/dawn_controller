@@ -10,8 +10,8 @@ addrmap pl_control {
 
     reg {
         name = "VERSION";
-        desc = "Register contract version. Must read 0x00030000.";
-        field { sw = r; hw = na; reset = 32'h00030000; } value[31:0];
+        desc = "Register contract version. Must read 0x00040000.";
+        field { sw = r; hw = na; reset = 32'h00040000; } value[31:0];
     } VERSION @ 12'h004;
 
     reg {
@@ -27,6 +27,7 @@ addrmap pl_control {
         field { sw = r; hw = w; reset = 1'b1; desc = "Control block is ready."; } ready[0:0];
         field { sw = r; hw = w; reset = 1'b0; desc = "Last commit exceeded bank capacity."; } overflow[1:1];
         field { sw = r; hw = w; reset = 1'b0; desc = "WS281x consumer detected an error."; } consumer_error[2:2];
+        field { sw = r; hw = w; reset = 1'b0; desc = "Last commit targeted a non-free bank."; } commit_rejected[3:3];
     } STATUS @ 12'h00c;
 
     reg {
@@ -165,4 +166,34 @@ addrmap pl_control {
         desc = "Packed FSM debug snapshot for JTAG bring-up.";
         field { sw = r; hw = w; reset = 32'h0; } value[31:0];
     } CONSUMER_DEBUG @ 12'h068;
+
+    reg {
+        name = "WRITE_BANK_VALID";
+        desc = "One when WRITE_BANK is safe for PS writes.";
+        field { sw = r; hw = w; reset = 1'b1; } value[0:0];
+    } WRITE_BANK_VALID @ 12'h06c;
+
+    reg {
+        name = "BUSY_BANK";
+        desc = "Bank currently being consumed, or 0xffffffff when idle.";
+        field { sw = r; hw = w; reset = 32'hffffffff; } value[31:0];
+    } BUSY_BANK @ 12'h070;
+
+    reg {
+        name = "FRAME_DROPPED";
+        desc = "Frames intentionally dropped by software because no bank was free.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } FRAME_DROPPED @ 12'h074;
+
+    reg {
+        name = "FRAME_REJECTED";
+        desc = "Frame commits rejected by hardware because the target bank was not free or valid.";
+        field { sw = r; hw = w; reset = 32'h0; } value[31:0];
+    } FRAME_REJECTED @ 12'h078;
+
+    reg {
+        name = "FRAME_DROP_NOTIFY";
+        desc = "Software writes one to count an intentionally dropped frame.";
+        field { sw = w; hw = r; reset = 1'b0; swmod = true; } value[0:0];
+    } FRAME_DROP_NOTIFY @ 12'h07c;
 };

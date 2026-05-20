@@ -7,7 +7,7 @@ module tb_ws281x_consumer;
     localparam PIXELS_PER_OUTPUT = 2;
     localparam FRAME_WORDS = 16;
     localparam [31:0] PL_CONTROL_ID_VALUE = 32'h4546_504c;
-    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0003_0000;
+    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0004_0000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ID_OFFSET = 12'h000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_VERSION_OFFSET = 12'h004;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONTROL_OFFSET = 12'h008;
@@ -26,11 +26,18 @@ module tb_ws281x_consumer;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET = 12'h054;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_ERROR_COUNT_OFFSET = 12'h058;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONSUMER_DEBUG_OFFSET = 12'h068;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_WRITE_BANK_VALID_OFFSET = 12'h06c;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_BUSY_BANK_OFFSET = 12'h070;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_DROPPED_OFFSET = 12'h074;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_REJECTED_OFFSET = 12'h078;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_DROP_NOTIFY_OFFSET = 12'h07c;
     localparam [31:0] PL_CONTROL_STATUS_READY = 32'h0000_0001;
     localparam [31:0] PL_CONTROL_STATUS_OVERFLOW = 32'h0000_0002;
+    localparam [31:0] PL_CONTROL_STATUS_COMMIT_REJECTED = 32'h0000_0008;
     localparam [31:0] PL_CONTROL_CONTROL_CLEAR_ERRORS = 32'h0000_0002;
     localparam [31:0] PL_CONTROL_CONSUMER_ENABLE = 32'h0000_0001;
     localparam [31:0] PL_CONTROL_CONSUMER_RESET = 32'h0000_0002;
+    localparam [31:0] PL_CONTROL_CONSUMER_BUSY = 32'h0000_0002;
 
     reg aclk = 1'b0;
     reg aresetn = 1'b0;
@@ -87,6 +94,7 @@ module tb_ws281x_consumer;
     integer i;
     integer word_addr;
     reg [31:0] write_bank;
+    reg [31:0] second_write_bank;
     reg [31:0] bank_words;
     reg [31:0] read_data;
 
@@ -272,14 +280,74 @@ module tb_ws281x_consumer;
         ctl_write(PL_CONTROL_CONSUMER_CONTROL_OFFSET, PL_CONTROL_CONSUMER_ENABLE);
 
         for (i = 0; i < 200000; i = i + 1) begin
+            ctl_read(PL_CONTROL_CONSUMER_STATUS_OFFSET, read_data);
+            if ((read_data & PL_CONTROL_CONSUMER_BUSY) != 0) begin
+                i = 200000;
+            end
+        end
+        ctl_read(PL_CONTROL_CONSUMER_STATUS_OFFSET, read_data);
+        if ((read_data & PL_CONTROL_CONSUMER_BUSY) == 0) begin
+            $fatal(1, "consumer did not become busy");
+        end
+
+        ctl_read(PL_CONTROL_WRITE_BANK_VALID_OFFSET, read_data);
+        if (read_data != 32'h0000_0001) begin
+            $fatal(1, "write bank should be valid while only active bank is busy: %08x", read_data);
+        end
+        ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, second_write_bank);
+        for (i = 0; i < OUTPUT_COUNT * PIXELS_PER_OUTPUT; i = i + 1) begin
+            word_addr = (second_write_bank * bank_words) + i;
+            ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0102_0304 + i);
+        end
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (second_write_bank << 31) | (OUTPUT_COUNT * PIXELS_PER_OUTPUT));
+        ctl_read(PL_CONTROL_FRAME_COUNT_OFFSET, read_data);
+        if (read_data != 32'h0000_0002) begin
+            $fatal(1, "second valid commit left frame count %08x", read_data);
+        end
+        ctl_read(PL_CONTROL_WRITE_BANK_VALID_OFFSET, read_data);
+        if (read_data != 32'h0000_0000) begin
+            $fatal(1, "write bank should be invalid after both banks are owned: %08x", read_data);
+        end
+        ctl_read(PL_CONTROL_BUSY_BANK_OFFSET, read_data);
+        if (read_data != write_bank) begin
+            $fatal(1, "busy bank is %08x expected %08x", read_data, write_bank);
+        end
+
+        ctl_write(PL_CONTROL_FRAME_DROP_NOTIFY_OFFSET, 32'h0000_0001);
+        ctl_read(PL_CONTROL_FRAME_DROPPED_OFFSET, read_data);
+        if (read_data != 32'h0000_0001) begin
+            $fatal(1, "frame dropped count is %08x", read_data);
+        end
+
+        ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31) | (OUTPUT_COUNT * PIXELS_PER_OUTPUT));
+        ctl_read(PL_CONTROL_STATUS_OFFSET, read_data);
+        if ((read_data & PL_CONTROL_STATUS_COMMIT_REJECTED) == 0) begin
+            $fatal(1, "invalid commit did not set commit rejected: %08x", read_data);
+        end
+        ctl_read(PL_CONTROL_FRAME_REJECTED_OFFSET, read_data);
+        if (read_data != 32'h0000_0001) begin
+            $fatal(1, "frame rejected count is %08x", read_data);
+        end
+        ctl_read(PL_CONTROL_FRAME_COUNT_OFFSET, read_data);
+        if (read_data != 32'h0000_0002) begin
+            $fatal(1, "rejected commit changed frame count to %08x", read_data);
+        end
+        ctl_write(PL_CONTROL_CONTROL_OFFSET, PL_CONTROL_CONTROL_CLEAR_ERRORS);
+        ctl_read(PL_CONTROL_STATUS_OFFSET, read_data);
+        if (read_data != PL_CONTROL_STATUS_READY) begin
+            $fatal(1, "clear after rejected commit left status %08x", read_data);
+        end
+
+        for (i = 0; i < 200000; i = i + 1) begin
             ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
-            if (read_data == 32'h0000_0001) begin
+            if (read_data == 32'h0000_0002) begin
                 ctl_read(PL_CONTROL_CONSUMER_ERROR_COUNT_OFFSET, read_data);
                 if (read_data != 32'h0000_0000) begin
                     $fatal(1, "consumer error count is %08x", read_data);
                 end
                 ctl_read(PL_CONTROL_CONSUMER_SEQUENCE_OFFSET, read_data);
-                if (read_data != 32'h0000_0001) begin
+                if (read_data != 32'h0000_0002) begin
                     $fatal(1, "consumer sequence is %08x", read_data);
                 end
                 $display("WS281x consumer simulation passed");
