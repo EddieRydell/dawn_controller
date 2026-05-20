@@ -21,12 +21,12 @@ int main(void)
     uint32_t dropped_frames = 0u;
 
     xil_printf("\r\ndonder controller starting\r\n");
-    xil_printf("outputs=%lu pixels_per_output=%lu frame_words=%lu e131_port=%u first_universe=%u\r\n",
-               (unsigned long)g_app_config.output_count,
-               (unsigned long)g_app_config.pixels_per_output,
-               (unsigned long)g_app_config.words_per_frame,
-               g_app_config.e131_port,
-               g_app_config.first_universe);
+    xil_printf("outputs=%u pixels_per_output=%u frame_words=%u e131_port=%u first_universe=%u\r\n",
+               (unsigned int)g_app_config.output_count,
+               (unsigned int)g_app_config.pixels_per_output,
+               (unsigned int)g_app_config.words_per_frame,
+               (unsigned int)g_app_config.e131_port,
+               (unsigned int)g_app_config.first_universe);
 
     pl_ingest_result_t init_result = pl_ingest_init(g_app_config.words_per_frame);
     if (init_result != PL_INGEST_OK) {
@@ -68,14 +68,14 @@ int main(void)
         if (((accepted_frames + dropped_frames) % 100u) == 0u) {
             pl_ingest_snapshot_t snapshot;
             pl_ingest_snapshot(&snapshot);
-            xil_printf("frames accepted=%lu dropped=%lu pl_dropped=%lu rejected=%lu write_valid=%lu busy_bank=0x%08lx consumer_frames=%lu\r\n",
-                       (unsigned long)accepted_frames,
-                       (unsigned long)dropped_frames,
-                       (unsigned long)snapshot.frame_dropped,
-                       (unsigned long)snapshot.frame_rejected,
-                       (unsigned long)snapshot.write_bank_valid,
-                       (unsigned long)snapshot.busy_bank,
-                       (unsigned long)snapshot.consumer_frame_count);
+            xil_printf("frames accepted=%u dropped=%u pl_dropped=%u rejected=%u write_valid=%u busy_bank=0x%08x consumer_frames=%u\r\n",
+                       (unsigned int)accepted_frames,
+                       (unsigned int)dropped_frames,
+                       (unsigned int)snapshot.frame_dropped,
+                       (unsigned int)snapshot.frame_rejected,
+                       (unsigned int)snapshot.write_bank_valid,
+                       (unsigned int)snapshot.busy_bank,
+                       (unsigned int)snapshot.consumer_frame_count);
         }
 
         frame_number++;

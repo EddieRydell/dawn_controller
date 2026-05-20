@@ -81,19 +81,19 @@ pl_ingest_result_t pl_ingest_init(uint32_t required_words)
     pl_ingest_snapshot_t snapshot;
 
     pl_ingest_snapshot(&snapshot);
-    xil_printf("pl_control=0x%08lx pl_frame=0x%08lx id=0x%08lx version=0x%08lx capacity=%lu bank_words=%lu active_bank=%lu write_bank=%lu write_valid=%lu busy_bank=0x%08lx status=0x%08lx consumer_status=0x%08lx\r\n",
-               (unsigned long)PL_CONTROL_BASEADDR,
-               (unsigned long)PL_FRAME_BASEADDR,
-               (unsigned long)snapshot.id,
-               (unsigned long)snapshot.version,
-               (unsigned long)snapshot.capacity_words,
-               (unsigned long)snapshot.bank_words,
-               (unsigned long)snapshot.active_bank,
-               (unsigned long)snapshot.write_bank,
-               (unsigned long)snapshot.write_bank_valid,
-               (unsigned long)snapshot.busy_bank,
-               (unsigned long)snapshot.status,
-               (unsigned long)snapshot.consumer_status);
+    xil_printf("pl_control=0x%08x pl_frame=0x%08x id=0x%08x version=0x%08x capacity=%u bank_words=%u active_bank=%u write_bank=%u write_valid=%u busy_bank=0x%08x status=0x%08x consumer_status=0x%08x\r\n",
+               (unsigned int)PL_CONTROL_BASEADDR,
+               (unsigned int)PL_FRAME_BASEADDR,
+               (unsigned int)snapshot.id,
+               (unsigned int)snapshot.version,
+               (unsigned int)snapshot.capacity_words,
+               (unsigned int)snapshot.bank_words,
+               (unsigned int)snapshot.active_bank,
+               (unsigned int)snapshot.write_bank,
+               (unsigned int)snapshot.write_bank_valid,
+               (unsigned int)snapshot.busy_bank,
+               (unsigned int)snapshot.status,
+               (unsigned int)snapshot.consumer_status);
 
     if (snapshot.id != PL_CONTROL__ID__VALUE_reset) {
         return PL_INGEST_BAD_ID;

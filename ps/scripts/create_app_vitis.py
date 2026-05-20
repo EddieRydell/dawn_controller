@@ -31,6 +31,26 @@ platform = client.create_platform_component(
     domain_name="standalone",
 )
 
+mark("set stdout uart0")
+for domain_name in ("standalone", "zynq_fsbl"):
+    domain = platform.get_domain(domain_name)
+    domain.set_config("os", "standalone_stdin", "ps7_uart_0")
+    domain.set_config("os", "standalone_stdout", "ps7_uart_0")
+    domain.set_config(
+        "proc",
+        "proc_extra_compiler_flags",
+        " -O2 -g -fno-tree-loop-distribute-patterns",
+    )
+
+mark("silence generated fsbl warnings")
+fsbl_user_config = workspace / "donder_platform" / "zynq_fsbl" / "UserConfig.cmake"
+fsbl_config = fsbl_user_config.read_text()
+fsbl_config = fsbl_config.replace(
+    "set(USER_COMPILE_WARNINGS_INHIBIT_ALL )",
+    "set(USER_COMPILE_WARNINGS_INHIBIT_ALL -w)",
+)
+fsbl_user_config.write_text(fsbl_config)
+
 mark("platform build")
 platform.build()
 

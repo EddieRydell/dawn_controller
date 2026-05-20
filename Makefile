@@ -8,6 +8,8 @@ XSIM ?= xsim
 VITIS ?= vitis
 BOOTGEN ?= bootgen
 POWERSHELL ?= powershell
+PORT ?=
+BAUD ?= 115200
 
 XSA := build/vivado/donder_controller.xsa
 BITSTREAM := build/vivado/donder_controller.runs/impl_1/donder_system_wrapper.bit
@@ -16,7 +18,7 @@ BOOT_BIN := build/sd/BOOT.BIN
 RTL_CHECK_DIR := build/rtl-check
 RTL_SIM_DIR := build/rtl-sim
 
-.PHONY: help all regs regs-check rtl-check rtl-sim hw ps boot run clean
+.PHONY: help all regs regs-check rtl-check rtl-sim hw ps boot run logs clean
 
 help:
 	@echo Common targets:
@@ -28,6 +30,7 @@ help:
 	@echo   make ps      Build the bare-metal controller app
 	@echo   make boot    Package deployable SD-card BOOT.BIN
 	@echo   make run     Program FPGA and run the controller app over JTAG
+	@echo   make logs PORT=COMx  Stream UART telemetry at BAUD=115200
 	@echo   make all     Run hw, ps, and boot
 	@echo   make clean   Remove generated Xilinx output and root log clutter
 
@@ -68,6 +71,9 @@ $(BOOT_BIN): $(PS_STAMP) ps/scripts/package_boot.py
 
 run: $(PS_STAMP)
 	$(PYTHON) ps/scripts/run_xsdb_checked.py ps/scripts/run_controller.tcl
+
+logs:
+	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File ps/scripts/serial_logs.ps1 -Port "$(PORT)" -Baud $(BAUD)
 
 clean:
 	$(POWERSHELL) -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'build','.Xil','NA'"
