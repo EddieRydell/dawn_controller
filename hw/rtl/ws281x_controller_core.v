@@ -74,10 +74,17 @@ module ws281x_controller_core #(
     wire [31:0] consumer_error_count;
     wire [31:0] consumer_active_bank;
     wire [31:0] consumer_debug;
+    wire [31:0] runtime_active_output_count;
+    wire [31:0] runtime_strand0_pixel_count;
+    wire [31:0] runtime_strand1_pixel_count;
+    wire [31:0] runtime_strand2_pixel_count;
+    wire [31:0] runtime_strand3_pixel_count;
 
     pl_frame_control #(
         .AXIL_ADDR_WIDTH(AXIL_ADDR_WIDTH),
-        .FRAME_WORDS(FRAME_WORDS)
+        .FRAME_WORDS(FRAME_WORDS),
+        .OUTPUT_COUNT(OUTPUT_COUNT),
+        .PIXELS_PER_OUTPUT(PIXELS_PER_OUTPUT)
     ) frame_control (
         .aclk(aclk),
         .aresetn(aresetn),
@@ -112,7 +119,12 @@ module ws281x_controller_core #(
         .consumer_active_bank(consumer_active_bank),
         .active_bank(active_bank),
         .committed_words(committed_words),
-        .frame_sequence(frame_sequence)
+        .frame_sequence(frame_sequence),
+        .runtime_active_output_count(runtime_active_output_count),
+        .runtime_strand0_pixel_count(runtime_strand0_pixel_count),
+        .runtime_strand1_pixel_count(runtime_strand1_pixel_count),
+        .runtime_strand2_pixel_count(runtime_strand2_pixel_count),
+        .runtime_strand3_pixel_count(runtime_strand3_pixel_count)
     );
 
     ws281x_frame_consumer #(
@@ -130,6 +142,11 @@ module ws281x_controller_core #(
         .active_bank(active_bank),
         .committed_words(committed_words),
         .frame_sequence(frame_sequence),
+        .runtime_active_output_count(runtime_active_output_count),
+        .runtime_strand0_pixel_count(runtime_strand0_pixel_count),
+        .runtime_strand1_pixel_count(runtime_strand1_pixel_count),
+        .runtime_strand2_pixel_count(runtime_strand2_pixel_count),
+        .runtime_strand3_pixel_count(runtime_strand3_pixel_count),
         .busy(consumer_busy),
         .reset_low(consumer_reset_low),
         .error_pulse(consumer_error_pulse),

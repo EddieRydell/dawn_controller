@@ -7,7 +7,7 @@ module tb_ws281x_consumer;
     localparam PIXELS_PER_OUTPUT = 2;
     localparam FRAME_WORDS = 16;
     localparam [31:0] PL_CONTROL_ID_VALUE = 32'h4546_504c;
-    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0004_0000;
+    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0005_0000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ID_OFFSET = 12'h000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_VERSION_OFFSET = 12'h004;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONTROL_OFFSET = 12'h008;
@@ -31,6 +31,12 @@ module tb_ws281x_consumer;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_DROPPED_OFFSET = 12'h074;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_REJECTED_OFFSET = 12'h078;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_DROP_NOTIFY_OFFSET = 12'h07c;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET = 12'h080;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET = 12'h084;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND1_PIXEL_COUNT_OFFSET = 12'h088;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND2_PIXEL_COUNT_OFFSET = 12'h08c;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND3_PIXEL_COUNT_OFFSET = 12'h090;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONFIG_STATUS_OFFSET = 12'h094;
     localparam [31:0] PL_CONTROL_STATUS_READY = 32'h0000_0001;
     localparam [31:0] PL_CONTROL_STATUS_OVERFLOW = 32'h0000_0002;
     localparam [31:0] PL_CONTROL_STATUS_COMMIT_REJECTED = 32'h0000_0008;
@@ -93,12 +99,32 @@ module tb_ws281x_consumer;
 
     integer i;
     integer word_addr;
+    integer frame_read_word;
+    integer frame_read_in_bank_word;
     reg [31:0] write_bank;
     reg [31:0] second_write_bank;
     reg [31:0] bank_words;
     reg [31:0] read_data;
+    reg monitor_runtime_config_reads = 1'b0;
+    reg monitor_no_frame_reads = 1'b0;
 
     always #5 aclk = ~aclk;
+
+    always @(posedge aclk) begin
+        if (aresetn && monitor_runtime_config_reads && frame_arvalid && frame_arready) begin
+            if (monitor_no_frame_reads) begin
+                $fatal(1, "consumer read frame RAM with zero active runtime config");
+            end
+            frame_read_word = frame_araddr >> 2;
+            frame_read_in_bank_word = frame_read_word % bank_words;
+            if (frame_read_in_bank_word != 0
+                && frame_read_in_bank_word != 1
+                && frame_read_in_bank_word != 2
+                && frame_read_in_bank_word != 5) begin
+                $fatal(1, "consumer read inactive runtime-config word %0d", frame_read_in_bank_word);
+            end
+        end
+    end
 
     ws281x_controller_core #(
         .AXIL_ADDR_WIDTH(AXIL_ADDR_WIDTH),
@@ -260,12 +286,39 @@ module tb_ws281x_consumer;
             $fatal(1, "clear errors left status %08x", read_data);
         end
 
+        ctl_read(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, read_data);
+        if (read_data != 32'h0000_0004) begin
+            $fatal(1, "default active output count is %08x", read_data);
+        end
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0003);
+        ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0001);
+        ctl_write(PL_CONTROL_STRAND1_PIXEL_COUNT_OFFSET, 32'h0000_0002);
+        ctl_write(PL_CONTROL_STRAND2_PIXEL_COUNT_OFFSET, 32'h0000_0001);
+        ctl_write(PL_CONTROL_STRAND3_PIXEL_COUNT_OFFSET, 32'h0000_0000);
+        ctl_read(PL_CONTROL_CONFIG_STATUS_OFFSET, read_data);
+        if ((read_data & 32'h0000_0001) != 0) begin
+            $fatal(1, "valid runtime config set sticky invalid: %08x", read_data);
+        end
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0005);
+        ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0003);
+        ctl_read(PL_CONTROL_CONFIG_STATUS_OFFSET, read_data);
+        if ((read_data & 32'h0000_0103) != 32'h0000_0103) begin
+            $fatal(1, "invalid runtime config did not report clamp/sticky status: %08x", read_data);
+        end
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0003);
+        ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0001);
+        ctl_write(PL_CONTROL_CONTROL_OFFSET, PL_CONTROL_CONTROL_CLEAR_ERRORS);
+        ctl_read(PL_CONTROL_CONFIG_STATUS_OFFSET, read_data);
+        if ((read_data & 32'h0000_0001) != 0) begin
+            $fatal(1, "clear/valid runtime config left sticky invalid: %08x", read_data);
+        end
+
         for (i = 0; i < OUTPUT_COUNT * PIXELS_PER_OUTPUT; i = i + 1) begin
             word_addr = (write_bank * bank_words) + i;
             ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0001_0203 + i);
         end
 
-        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (write_bank << 31) | (OUTPUT_COUNT * PIXELS_PER_OUTPUT));
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (write_bank << 31) | 32'h0000_0006);
         ctl_read(PL_CONTROL_ACTIVE_BANK_OFFSET, read_data);
         if (read_data != write_bank) begin
             $fatal(1, "active bank is %08x expected %08x", read_data, write_bank);
@@ -277,6 +330,7 @@ module tb_ws281x_consumer;
 
         ctl_write(PL_CONTROL_CONSUMER_CONTROL_OFFSET, PL_CONTROL_CONSUMER_RESET);
         ctl_write(PL_CONTROL_CONTROL_OFFSET, PL_CONTROL_CONTROL_CLEAR_ERRORS);
+        monitor_runtime_config_reads <= 1'b1;
         ctl_write(PL_CONTROL_CONSUMER_CONTROL_OFFSET, PL_CONTROL_CONSUMER_ENABLE);
 
         for (i = 0; i < 200000; i = i + 1) begin
@@ -299,7 +353,7 @@ module tb_ws281x_consumer;
             word_addr = (second_write_bank * bank_words) + i;
             ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0102_0304 + i);
         end
-        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (second_write_bank << 31) | (OUTPUT_COUNT * PIXELS_PER_OUTPUT));
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (second_write_bank << 31) | 32'h0000_0006);
         ctl_read(PL_CONTROL_FRAME_COUNT_OFFSET, read_data);
         if (read_data != 32'h0000_0002) begin
             $fatal(1, "second valid commit left frame count %08x", read_data);
@@ -320,7 +374,7 @@ module tb_ws281x_consumer;
         end
 
         ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
-        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31) | (OUTPUT_COUNT * PIXELS_PER_OUTPUT));
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31) | 32'h0000_0006);
         ctl_read(PL_CONTROL_STATUS_OFFSET, read_data);
         if ((read_data & PL_CONTROL_STATUS_COMMIT_REJECTED) == 0) begin
             $fatal(1, "invalid commit did not set commit rejected: %08x", read_data);
@@ -349,6 +403,30 @@ module tb_ws281x_consumer;
                 ctl_read(PL_CONTROL_CONSUMER_SEQUENCE_OFFSET, read_data);
                 if (read_data != 32'h0000_0002) begin
                     $fatal(1, "consumer sequence is %08x", read_data);
+                end
+                i = 200000;
+            end
+        end
+
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0000);
+        ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0000);
+        ctl_write(PL_CONTROL_STRAND1_PIXEL_COUNT_OFFSET, 32'h0000_0000);
+        ctl_write(PL_CONTROL_STRAND2_PIXEL_COUNT_OFFSET, 32'h0000_0000);
+        ctl_write(PL_CONTROL_STRAND3_PIXEL_COUNT_OFFSET, 32'h0000_0000);
+        monitor_no_frame_reads <= 1'b1;
+        ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31));
+        ctl_read(PL_CONTROL_COMMITTED_WORDS_OFFSET, read_data);
+        if (read_data != 32'h0000_0000) begin
+            $fatal(1, "zero-active commit words is %08x", read_data);
+        end
+
+        for (i = 0; i < 200000; i = i + 1) begin
+            ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
+            if (read_data == 32'h0000_0003) begin
+                ctl_read(PL_CONTROL_CONSUMER_ERROR_COUNT_OFFSET, read_data);
+                if (read_data != 32'h0000_0000) begin
+                    $fatal(1, "zero-active consumer error count is %08x", read_data);
                 end
                 $display("WS281x consumer simulation passed");
                 $finish;

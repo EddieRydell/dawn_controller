@@ -74,6 +74,62 @@ void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot)
     snapshot->consumer_sequence = pl_ingest_read(PL_CONTROL_OFFSET(CONSUMER_SEQUENCE));
     snapshot->consumer_frame_count = pl_ingest_read(PL_CONTROL_OFFSET(CONSUMER_FRAME_COUNT));
     snapshot->consumer_error_count = pl_ingest_read(PL_CONTROL_OFFSET(CONSUMER_ERROR_COUNT));
+    snapshot->active_output_count = pl_ingest_read(PL_CONTROL_OFFSET(ACTIVE_OUTPUT_COUNT));
+    snapshot->strand_pixel_count[0] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND0_PIXEL_COUNT));
+    snapshot->strand_pixel_count[1] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND1_PIXEL_COUNT));
+    snapshot->strand_pixel_count[2] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND2_PIXEL_COUNT));
+    snapshot->strand_pixel_count[3] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND3_PIXEL_COUNT));
+    snapshot->config_status = pl_ingest_read(PL_CONTROL_OFFSET(CONFIG_STATUS));
+}
+
+static uint32_t min_u32(uint32_t a, uint32_t b)
+{
+    return a < b ? a : b;
+}
+
+static uint32_t config_required_words(uint32_t active_count, const uint32_t lengths[4], uint32_t max_output_count)
+{
+    uint32_t required_words = 0u;
+
+    for (uint32_t output = 0u; output < max_output_count && output < 4u; ++output) {
+        if (output < active_count && lengths[output] > 0u) {
+            uint32_t required = ((lengths[output] - 1u) * max_output_count) + output + 1u;
+            if (required > required_words) {
+                required_words = required;
+            }
+        }
+    }
+
+    return required_words;
+}
+
+pl_ingest_result_t pl_ingest_get_config(pl_ingest_config_t *config)
+{
+    if (config == NULL) {
+        return PL_INGEST_BAD_ARGUMENT;
+    }
+
+    config->max_output_count = pl_ingest_read(PL_CONTROL_OFFSET(WS281X_OUTPUT_COUNT));
+    config->max_pixels_per_output = pl_ingest_read(PL_CONTROL_OFFSET(WS281X_PIXELS_PER_OUTPUT));
+    config->active_output_count = pl_ingest_read(PL_CONTROL_OFFSET(ACTIVE_OUTPUT_COUNT));
+    config->strand_pixel_count[0] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND0_PIXEL_COUNT));
+    config->strand_pixel_count[1] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND1_PIXEL_COUNT));
+    config->strand_pixel_count[2] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND2_PIXEL_COUNT));
+    config->strand_pixel_count[3] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND3_PIXEL_COUNT));
+    config->config_status = pl_ingest_read(PL_CONTROL_OFFSET(CONFIG_STATUS));
+
+    config->effective_active_output_count = min_u32(config->active_output_count, config->max_output_count);
+    if (config->effective_active_output_count > 4u) {
+        config->effective_active_output_count = 4u;
+    }
+    for (uint32_t output = 0u; output < 4u; ++output) {
+        config->effective_strand_pixel_count[output] = min_u32(config->strand_pixel_count[output], config->max_pixels_per_output);
+    }
+    config->required_words = config_required_words(config->effective_active_output_count,
+                                                   config->effective_strand_pixel_count,
+                                                   config->max_output_count);
+
+    return PL_INGEST_OK;
 }
 
 pl_ingest_result_t pl_ingest_init(uint32_t required_words)
@@ -81,7 +137,7 @@ pl_ingest_result_t pl_ingest_init(uint32_t required_words)
     pl_ingest_snapshot_t snapshot;
 
     pl_ingest_snapshot(&snapshot);
-    xil_printf("pl_control=0x%08x pl_frame=0x%08x id=0x%08x version=0x%08x capacity=%u bank_words=%u active_bank=%u write_bank=%u write_valid=%u busy_bank=0x%08x status=0x%08x consumer_status=0x%08x\r\n",
+    xil_printf("pl_control=0x%08x pl_frame=0x%08x id=0x%08x version=0x%08x capacity=%u bank_words=%u active_bank=%u write_bank=%u write_valid=%u busy_bank=0x%08x status=0x%08x consumer_status=0x%08x max_outputs=%u max_pixels=%u active_outputs=%u lengths=[%u,%u,%u,%u] config_status=0x%08x\r\n",
                (unsigned int)PL_CONTROL_BASEADDR,
                (unsigned int)PL_FRAME_BASEADDR,
                (unsigned int)snapshot.id,
@@ -93,7 +149,15 @@ pl_ingest_result_t pl_ingest_init(uint32_t required_words)
                (unsigned int)snapshot.write_bank_valid,
                (unsigned int)snapshot.busy_bank,
                (unsigned int)snapshot.status,
-               (unsigned int)snapshot.consumer_status);
+               (unsigned int)snapshot.consumer_status,
+               (unsigned int)pl_ingest_read(PL_CONTROL_OFFSET(WS281X_OUTPUT_COUNT)),
+               (unsigned int)pl_ingest_read(PL_CONTROL_OFFSET(WS281X_PIXELS_PER_OUTPUT)),
+               (unsigned int)snapshot.active_output_count,
+               (unsigned int)snapshot.strand_pixel_count[0],
+               (unsigned int)snapshot.strand_pixel_count[1],
+               (unsigned int)snapshot.strand_pixel_count[2],
+               (unsigned int)snapshot.strand_pixel_count[3],
+               (unsigned int)snapshot.config_status);
 
     if (snapshot.id != PL_CONTROL__ID__VALUE_reset) {
         return PL_INGEST_BAD_ID;
@@ -216,6 +280,21 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
         || after.frame_rejected != before.frame_rejected) {
         return PL_INGEST_COMMIT_FAILED;
     }
+
+    return PL_INGEST_OK;
+}
+
+pl_ingest_result_t pl_ingest_configure_strands(uint32_t active_count, const uint32_t lengths[4])
+{
+    if (lengths == NULL) {
+        return PL_INGEST_BAD_ARGUMENT;
+    }
+
+    pl_ingest_write(PL_CONTROL_OFFSET(ACTIVE_OUTPUT_COUNT), active_count);
+    pl_ingest_write(PL_CONTROL_OFFSET(STRAND0_PIXEL_COUNT), lengths[0]);
+    pl_ingest_write(PL_CONTROL_OFFSET(STRAND1_PIXEL_COUNT), lengths[1]);
+    pl_ingest_write(PL_CONTROL_OFFSET(STRAND2_PIXEL_COUNT), lengths[2]);
+    pl_ingest_write(PL_CONTROL_OFFSET(STRAND3_PIXEL_COUNT), lengths[3]);
 
     return PL_INGEST_OK;
 }

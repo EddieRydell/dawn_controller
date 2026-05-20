@@ -16,6 +16,11 @@ module ws281x_frame_consumer #(
     input  wire [31:0]                active_bank,
     input  wire [31:0]                committed_words,
     input  wire [31:0]                frame_sequence,
+    input  wire [31:0]                runtime_active_output_count,
+    input  wire [31:0]                runtime_strand0_pixel_count,
+    input  wire [31:0]                runtime_strand1_pixel_count,
+    input  wire [31:0]                runtime_strand2_pixel_count,
+    input  wire [31:0]                runtime_strand3_pixel_count,
 
     output wire                       busy,
     output wire                       reset_low,
@@ -38,7 +43,6 @@ module ws281x_frame_consumer #(
 );
 
     localparam [31:0] FRAME_WORDS_PER_BANK = FRAME_WORDS / 2;
-    localparam [31:0] FRAME_WORDS_REQUIRED = OUTPUT_COUNT * PIXELS_PER_OUTPUT;
     localparam integer WS_BIT_CYCLES = CLK_HZ / WS281X_BIT_RATE;
     localparam integer WS_T0H_CYCLES = 35;
     localparam integer WS_T1H_CYCLES = 70;
@@ -103,8 +107,79 @@ module ws281x_frame_consumer #(
         end
     endfunction
 
+    function automatic [31:0] strand_pixel_count(input [31:0] output_num);
+        begin
+            case (output_num)
+            32'd0: strand_pixel_count = runtime_strand0_pixel_count;
+            32'd1: strand_pixel_count = runtime_strand1_pixel_count;
+            32'd2: strand_pixel_count = runtime_strand2_pixel_count;
+            32'd3: strand_pixel_count = runtime_strand3_pixel_count;
+            default: strand_pixel_count = 32'h0000_0000;
+            endcase
+        end
+    endfunction
+
+    function automatic output_active_for_pixel(input [31:0] pixel, input [31:0] output_num);
+        begin
+            output_active_for_pixel =
+                output_num < OUTPUT_COUNT
+                && output_num < runtime_active_output_count
+                && pixel < strand_pixel_count(output_num);
+        end
+    endfunction
+
+    function automatic [31:0] max_effective_pixels;
+        integer idx;
+        logic [31:0] length;
+        begin
+            max_effective_pixels = 32'h0000_0000;
+            for (idx = 0; idx < OUTPUT_COUNT; idx = idx + 1) begin
+                length = strand_pixel_count(idx);
+                if (idx < runtime_active_output_count && length > max_effective_pixels) begin
+                    max_effective_pixels = length;
+                end
+            end
+        end
+    endfunction
+
+    function automatic [31:0] required_frame_words;
+        integer idx;
+        logic [31:0] length;
+        logic [31:0] required;
+        begin
+            required_frame_words = 32'h0000_0000;
+            for (idx = 0; idx < OUTPUT_COUNT; idx = idx + 1) begin
+                length = strand_pixel_count(idx);
+                if (idx < runtime_active_output_count && length != 32'h0000_0000) begin
+                    required = ((length - 32'd1) * OUTPUT_COUNT) + idx + 32'd1;
+                    if (required > required_frame_words) begin
+                        required_frame_words = required;
+                    end
+                end
+            end
+        end
+    endfunction
+
+    function automatic [31:0] next_read_output(input [31:0] pixel, input [31:0] start_output);
+        integer idx;
+        logic found;
+        begin
+            next_read_output = OUTPUT_COUNT;
+            found = 1'b0;
+            for (idx = 0; idx < OUTPUT_COUNT; idx = idx + 1) begin
+                if (!found && idx >= start_output && output_active_for_pixel(pixel, idx)) begin
+                    next_read_output = idx;
+                    found = 1'b1;
+                end
+            end
+        end
+    endfunction
+
     always_ff @(posedge aclk) begin
         logic [FRAME_ADDR_WIDTH-1:0] next_read_addr;
+        logic [31:0] next_output;
+        logic [31:0] frame_pixels;
+        logic [31:0] frame_required_words;
 
         if (!aresetn) begin
             tx_state_reg <= TX_IDLE;
@@ -144,19 +219,33 @@ module ws281x_frame_consumer #(
             end
 
             if (tx_state_reg == TX_IDLE && enable && frame_sequence != consumer_sequence) begin
-                if (committed_words >= FRAME_WORDS_REQUIRED) begin
+                frame_pixels = max_effective_pixels();
+                frame_required_words = required_frame_words();
+                if (committed_words >= frame_required_words) begin
                     tx_sequence_reg <= frame_sequence;
                     tx_active_bank_reg <= active_bank;
                     consumer_active_bank <= active_bank;
                     pixel_index_reg <= 32'h0000_0000;
                     read_pixel_index_reg <= 32'h0000_0000;
-                    read_output_reg <= 32'h0000_0000;
                     next_pixel_valid_reg <= 1'b0;
-                    read_active_reg <= 1'b1;
-                    tx_state_reg <= TX_LOAD_FIRST;
-                    rd_state_reg <= RD_ADDR;
-                    m_frame_araddr <= frame_byte_addr(active_bank, 32'h0000_0000, 32'h0000_0000);
-                    m_frame_arvalid <= 1'b1;
+                    for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
+                        current_pixel_reg[output_index] <= 32'h0000_0000;
+                    end
+                    if (frame_pixels == 32'h0000_0000) begin
+                        reset_cycle_reg <= 32'h0000_0000;
+                        tx_state_reg <= TX_RESET;
+                        rd_state_reg <= RD_IDLE;
+                        m_frame_arvalid <= 1'b0;
+                        read_active_reg <= 1'b0;
+                    end else begin
+                        next_output = next_read_output(32'h0000_0000, 32'h0000_0000);
+                        read_output_reg <= next_output;
+                        read_active_reg <= 1'b1;
+                        tx_state_reg <= TX_LOAD_FIRST;
+                        rd_state_reg <= RD_ADDR;
+                        m_frame_araddr <= frame_byte_addr(active_bank, 32'h0000_0000, next_output);
+                        m_frame_arvalid <= 1'b1;
+                    end
                 end else begin
                     consumer_sequence <= frame_sequence;
                     consumer_error_count <= consumer_error_count + 32'd1;
@@ -182,7 +271,8 @@ module ws281x_frame_consumer #(
                         next_pixel_reg[read_output_reg] <= m_frame_rdata;
                     end
 
-                    if (read_output_reg == OUTPUT_COUNT - 1) begin
+                    next_output = next_read_output(read_pixel_index_reg, read_output_reg + 32'd1);
+                    if (next_output == OUTPUT_COUNT) begin
                         rd_state_reg <= RD_IDLE;
                         if (read_active_reg) begin
                             read_active_reg <= 1'b0;
@@ -190,8 +280,8 @@ module ws281x_frame_consumer #(
                             next_pixel_valid_reg <= 1'b1;
                         end
                     end else begin
-                        read_output_reg <= read_output_reg + 32'd1;
-                        next_read_addr = frame_byte_addr(tx_active_bank_reg, read_pixel_index_reg, read_output_reg + 32'd1);
+                        read_output_reg <= next_output;
+                        next_read_addr = frame_byte_addr(tx_active_bank_reg, read_pixel_index_reg, next_output);
                         m_frame_araddr <= next_read_addr;
                         m_frame_arvalid <= 1'b1;
                         rd_state_reg <= RD_ADDR;
@@ -207,11 +297,15 @@ module ws281x_frame_consumer #(
                     bit_index_reg <= 5'd0;
                     bit_cycle_reg <= 32'h0000_0000;
                     tx_state_reg <= TX_SEND;
-                    if (PIXELS_PER_OUTPUT > 1) begin
+                    if (max_effective_pixels() > 32'd1) begin
                         read_pixel_index_reg <= 32'd1;
-                        read_output_reg <= 32'h0000_0000;
+                        next_output = next_read_output(32'd1, 32'h0000_0000);
+                        read_output_reg <= next_output;
                         next_pixel_valid_reg <= 1'b0;
-                        next_read_addr = frame_byte_addr(tx_active_bank_reg, 32'd1, 32'h0000_0000);
+                        for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
+                            next_pixel_reg[output_index] <= 32'h0000_0000;
+                        end
+                        next_read_addr = frame_byte_addr(tx_active_bank_reg, 32'd1, next_output);
                         m_frame_araddr <= next_read_addr;
                         m_frame_arvalid <= 1'b1;
                         rd_state_reg <= RD_ADDR;
@@ -220,7 +314,8 @@ module ws281x_frame_consumer #(
             end
             TX_SEND: begin
                 for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
-                    ws281x_data_reg[output_index] <= bit_cycle_reg < (ws_bit_value(current_pixel_reg[output_index], bit_index_reg) ? WS_T1H_CYCLES : WS_T0H_CYCLES);
+                    ws281x_data_reg[output_index] <= output_active_for_pixel(pixel_index_reg, output_index)
+                        && bit_cycle_reg < (ws_bit_value(current_pixel_reg[output_index], bit_index_reg) ? WS_T1H_CYCLES : WS_T0H_CYCLES);
                 end
 
                 if (bit_cycle_reg == WS_BIT_CYCLES - 1) begin
@@ -228,7 +323,7 @@ module ws281x_frame_consumer #(
                     if (bit_index_reg == 5'd23) begin
                         bit_index_reg <= 5'd0;
                         ws281x_data_reg <= {OUTPUT_COUNT{1'b0}};
-                        if (pixel_index_reg == PIXELS_PER_OUTPUT - 1) begin
+                        if (pixel_index_reg == max_effective_pixels() - 32'd1) begin
                             tx_state_reg <= TX_RESET;
                             reset_cycle_reg <= 32'h0000_0000;
                         end else if (next_pixel_valid_reg) begin
@@ -237,10 +332,14 @@ module ws281x_frame_consumer #(
                             end
                             pixel_index_reg <= pixel_index_reg + 32'd1;
                             next_pixel_valid_reg <= 1'b0;
-                            if (pixel_index_reg + 32'd2 < PIXELS_PER_OUTPUT) begin
+                            if (pixel_index_reg + 32'd2 < max_effective_pixels()) begin
                                 read_pixel_index_reg <= pixel_index_reg + 32'd2;
-                                read_output_reg <= 32'h0000_0000;
-                                next_read_addr = frame_byte_addr(tx_active_bank_reg, pixel_index_reg + 32'd2, 32'h0000_0000);
+                                next_output = next_read_output(pixel_index_reg + 32'd2, 32'h0000_0000);
+                                read_output_reg <= next_output;
+                                for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
+                                    next_pixel_reg[output_index] <= 32'h0000_0000;
+                                end
+                                next_read_addr = frame_byte_addr(tx_active_bank_reg, pixel_index_reg + 32'd2, next_output);
                                 m_frame_araddr <= next_read_addr;
                                 m_frame_arvalid <= 1'b1;
                                 rd_state_reg <= RD_ADDR;

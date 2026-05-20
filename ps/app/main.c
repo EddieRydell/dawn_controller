@@ -21,7 +21,7 @@ int main(void)
     uint32_t dropped_frames = 0u;
 
     xil_printf("\r\ndonder controller starting\r\n");
-    xil_printf("outputs=%u pixels_per_output=%u frame_words=%u e131_port=%u first_universe=%u\r\n",
+    xil_printf("max_outputs=%u max_pixels_per_output=%u max_frame_words=%u e131_port=%u first_universe=%u\r\n",
                (unsigned int)g_app_config.output_count,
                (unsigned int)g_app_config.pixels_per_output,
                (unsigned int)g_app_config.words_per_frame,
@@ -39,6 +39,10 @@ int main(void)
     }
 
     frame_pipeline_init();
+    const uint32_t startup_lengths[DONDER_OUTPUT_COUNT] = {20u, 20u, 20u, 20u};
+    if (frame_pipeline_configure(DONDER_OUTPUT_COUNT, startup_lengths) != 0) {
+        fatal("startup_configure", -1);
+    }
     frame_pipeline_generate_test_pattern(frame_number);
     if (frame_pipeline_commit() != 0) {
         fatal("initial_frame_commit", -1);
@@ -68,14 +72,20 @@ int main(void)
         if (((accepted_frames + dropped_frames) % 100u) == 0u) {
             pl_ingest_snapshot_t snapshot;
             pl_ingest_snapshot(&snapshot);
-            xil_printf("frames accepted=%u dropped=%u pl_dropped=%u rejected=%u write_valid=%u busy_bank=0x%08x consumer_frames=%u\r\n",
+            xil_printf("frames accepted=%u dropped=%u pl_dropped=%u rejected=%u write_valid=%u busy_bank=0x%08x consumer_frames=%u active_outputs=%u lengths=[%u,%u,%u,%u] config_status=0x%08x\r\n",
                        (unsigned int)accepted_frames,
                        (unsigned int)dropped_frames,
                        (unsigned int)snapshot.frame_dropped,
                        (unsigned int)snapshot.frame_rejected,
                        (unsigned int)snapshot.write_bank_valid,
                        (unsigned int)snapshot.busy_bank,
-                       (unsigned int)snapshot.consumer_frame_count);
+                       (unsigned int)snapshot.consumer_frame_count,
+                       (unsigned int)snapshot.active_output_count,
+                       (unsigned int)snapshot.strand_pixel_count[0],
+                       (unsigned int)snapshot.strand_pixel_count[1],
+                       (unsigned int)snapshot.strand_pixel_count[2],
+                       (unsigned int)snapshot.strand_pixel_count[3],
+                       (unsigned int)snapshot.config_status);
         }
 
         frame_number++;

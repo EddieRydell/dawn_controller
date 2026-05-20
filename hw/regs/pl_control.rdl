@@ -10,8 +10,8 @@ addrmap pl_control {
 
     reg {
         name = "VERSION";
-        desc = "Register contract version. Must read 0x00040000.";
-        field { sw = r; hw = na; reset = 32'h00040000; } value[31:0];
+        desc = "Register contract version. Must read 0x00050000.";
+        field { sw = r; hw = na; reset = 32'h00050000; } value[31:0];
     } VERSION @ 12'h004;
 
     reg {
@@ -196,4 +196,42 @@ addrmap pl_control {
         desc = "Software writes one to count an intentionally dropped frame.";
         field { sw = w; hw = r; reset = 1'b0; swmod = true; } value[0:0];
     } FRAME_DROP_NOTIFY @ 12'h07c;
+
+    reg {
+        name = "ACTIVE_OUTPUT_COUNT";
+        desc = "Runtime active WS281x output count. Hardware clamps values above the synthesized output count.";
+        field { sw = rw; hw = r; reset = 32'd4; swmod = true; } value[31:0];
+    } ACTIVE_OUTPUT_COUNT @ 12'h080;
+
+    reg {
+        name = "STRAND0_PIXEL_COUNT";
+        desc = "Runtime pixel count for WS281x output 0. Hardware clamps values above the synthesized pixels per output.";
+        field { sw = rw; hw = r; reset = 32'd1024; swmod = true; } value[31:0];
+    } STRAND0_PIXEL_COUNT @ 12'h084;
+
+    reg {
+        name = "STRAND1_PIXEL_COUNT";
+        desc = "Runtime pixel count for WS281x output 1. Hardware clamps values above the synthesized pixels per output.";
+        field { sw = rw; hw = r; reset = 32'd1024; swmod = true; } value[31:0];
+    } STRAND1_PIXEL_COUNT @ 12'h088;
+
+    reg {
+        name = "STRAND2_PIXEL_COUNT";
+        desc = "Runtime pixel count for WS281x output 2. Hardware clamps values above the synthesized pixels per output.";
+        field { sw = rw; hw = r; reset = 32'd1024; swmod = true; } value[31:0];
+    } STRAND2_PIXEL_COUNT @ 12'h08c;
+
+    reg {
+        name = "STRAND3_PIXEL_COUNT";
+        desc = "Runtime pixel count for WS281x output 3. Hardware clamps values above the synthesized pixels per output.";
+        field { sw = rw; hw = r; reset = 32'd1024; swmod = true; } value[31:0];
+    } STRAND3_PIXEL_COUNT @ 12'h090;
+
+    reg {
+        name = "CONFIG_STATUS";
+        desc = "Runtime WS281x configuration status. config_invalid is sticky until CONTROL.clear_errors.";
+        field { sw = r; hw = w; reset = 1'b0; desc = "A raw runtime config write exceeded a synthesized maximum."; } config_invalid[0:0];
+        field { sw = r; hw = w; reset = 1'b0; desc = "Current active output count raw value is being clamped."; } active_count_clamped[1:1];
+        field { sw = r; hw = w; reset = 4'h0; desc = "Current per-strand length raw values being clamped."; } strand_length_clamped[11:8];
+    } CONFIG_STATUS @ 12'h094;
 };

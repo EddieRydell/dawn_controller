@@ -140,6 +140,12 @@ print_reg $pl_control_base 0x058 CONSUMER_ERROR_COUNT
 print_reg $pl_control_base 0x05c WS281X_BIT_RATE
 print_reg $pl_control_base 0x060 WS281X_OUTPUT_COUNT
 print_reg $pl_control_base 0x064 WS281X_PIXELS_PER_OUTPUT
+print_reg $pl_control_base 0x080 ACTIVE_OUTPUT_COUNT
+print_reg $pl_control_base 0x084 STRAND0_PIXEL_COUNT
+print_reg $pl_control_base 0x088 STRAND1_PIXEL_COUNT
+print_reg $pl_control_base 0x08c STRAND2_PIXEL_COUNT
+print_reg $pl_control_base 0x090 STRAND3_PIXEL_COUNT
+print_reg $pl_control_base 0x094 CONFIG_STATUS
 print_reg $pl_control_base 0x068 CONSUMER_DEBUG
 print_reg $pl_control_base 0x06c WRITE_BANK_VALID
 print_reg $pl_control_base 0x070 BUSY_BANK

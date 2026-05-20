@@ -2,7 +2,9 @@
 
 module pl_frame_control #(
     parameter AXIL_ADDR_WIDTH = 12,
-    parameter FRAME_WORDS = 8192
+    parameter FRAME_WORDS = 8192,
+    parameter OUTPUT_COUNT = 4,
+    parameter PIXELS_PER_OUTPUT = 1024
 ) (
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 aclk CLK", X_INTERFACE_PARAMETER = "ASSOCIATED_BUSIF S_AXI, ASSOCIATED_RESET aresetn" *)
     input  wire                       aclk,
@@ -65,7 +67,12 @@ module pl_frame_control #(
 
     output wire [31:0]                active_bank,
     output wire [31:0]                committed_words,
-    output wire [31:0]                frame_sequence
+    output wire [31:0]                frame_sequence,
+    output wire [31:0]                runtime_active_output_count,
+    output wire [31:0]                runtime_strand0_pixel_count,
+    output wire [31:0]                runtime_strand1_pixel_count,
+    output wire [31:0]                runtime_strand2_pixel_count,
+    output wire [31:0]                runtime_strand3_pixel_count
 );
 
     import pl_control_regs_pkg::*;
@@ -94,6 +101,7 @@ module pl_frame_control #(
     logic [31:0] active_bank_reg;
     logic [31:0] frame_sequence_reg;
     logic consumer_error_sticky_reg;
+    logic config_invalid_sticky_reg;
 
     logic frame_commit_swmod_q;
     logic control_clear_swmod_q;
@@ -101,10 +109,18 @@ module pl_frame_control #(
     logic first_frame_word_swmod_q;
     logic last_frame_word_swmod_q;
     logic frame_drop_notify_swmod_q;
+    logic active_output_count_swmod_q;
+    logic strand0_pixel_count_swmod_q;
+    logic strand1_pixel_count_swmod_q;
+    logic strand2_pixel_count_swmod_q;
+    logic strand3_pixel_count_swmod_q;
 
     wire [31:0] commit_value;
     wire [31:0] write_bank_value;
     wire write_bank_valid_value;
+    wire active_output_count_clamped;
+    wire [3:0] strand_length_clamped;
+    wire config_write_invalid;
 
     assign commit_value = {hwif_out.FRAME_COMMIT.bank.value, hwif_out.FRAME_COMMIT.word_count.value};
     assign write_bank_value = active_bank_reg ^ 32'h0000_0001;
@@ -113,6 +129,22 @@ module pl_frame_control #(
     assign active_bank = active_bank_reg;
     assign committed_words = committed_words_reg;
     assign frame_sequence = frame_sequence_reg;
+    assign active_output_count_clamped = hwif_out.ACTIVE_OUTPUT_COUNT.value.value > OUTPUT_COUNT;
+    assign strand_length_clamped[0] = hwif_out.STRAND0_PIXEL_COUNT.value.value > PIXELS_PER_OUTPUT;
+    assign strand_length_clamped[1] = hwif_out.STRAND1_PIXEL_COUNT.value.value > PIXELS_PER_OUTPUT;
+    assign strand_length_clamped[2] = hwif_out.STRAND2_PIXEL_COUNT.value.value > PIXELS_PER_OUTPUT;
+    assign strand_length_clamped[3] = hwif_out.STRAND3_PIXEL_COUNT.value.value > PIXELS_PER_OUTPUT;
+    assign config_write_invalid =
+        (active_output_count_swmod_q && active_output_count_clamped)
+        || (strand0_pixel_count_swmod_q && strand_length_clamped[0])
+        || (strand1_pixel_count_swmod_q && strand_length_clamped[1])
+        || (strand2_pixel_count_swmod_q && strand_length_clamped[2])
+        || (strand3_pixel_count_swmod_q && strand_length_clamped[3]);
+    assign runtime_active_output_count = active_output_count_clamped ? OUTPUT_COUNT : hwif_out.ACTIVE_OUTPUT_COUNT.value.value;
+    assign runtime_strand0_pixel_count = strand_length_clamped[0] ? PIXELS_PER_OUTPUT : hwif_out.STRAND0_PIXEL_COUNT.value.value;
+    assign runtime_strand1_pixel_count = strand_length_clamped[1] ? PIXELS_PER_OUTPUT : hwif_out.STRAND1_PIXEL_COUNT.value.value;
+    assign runtime_strand2_pixel_count = strand_length_clamped[2] ? PIXELS_PER_OUTPUT : hwif_out.STRAND2_PIXEL_COUNT.value.value;
+    assign runtime_strand3_pixel_count = strand_length_clamped[3] ? PIXELS_PER_OUTPUT : hwif_out.STRAND3_PIXEL_COUNT.value.value;
 
     assign hwif_in.STATUS.ready.next = status_reg[0];
     assign hwif_in.STATUS.overflow.next = status_reg[1];
@@ -142,6 +174,9 @@ module pl_frame_control #(
     assign hwif_in.BUSY_BANK.value.next = consumer_active_bank;
     assign hwif_in.FRAME_DROPPED.value.next = frame_dropped_reg;
     assign hwif_in.FRAME_REJECTED.value.next = frame_rejected_reg;
+    assign hwif_in.CONFIG_STATUS.config_invalid.next = config_invalid_sticky_reg;
+    assign hwif_in.CONFIG_STATUS.active_count_clamped.next = active_output_count_clamped;
+    assign hwif_in.CONFIG_STATUS.strand_length_clamped.next = strand_length_clamped;
 
     pl_control_regs regs (
         .clk(aclk),
@@ -185,12 +220,18 @@ module pl_frame_control #(
             active_bank_reg <= 32'h0000_0000;
             frame_sequence_reg <= 32'h0000_0000;
             consumer_error_sticky_reg <= 1'b0;
+            config_invalid_sticky_reg <= 1'b0;
             frame_commit_swmod_q <= 1'b0;
             control_clear_swmod_q <= 1'b0;
             consumer_reset_swmod_q <= 1'b0;
             first_frame_word_swmod_q <= 1'b0;
             last_frame_word_swmod_q <= 1'b0;
             frame_drop_notify_swmod_q <= 1'b0;
+            active_output_count_swmod_q <= 1'b0;
+            strand0_pixel_count_swmod_q <= 1'b0;
+            strand1_pixel_count_swmod_q <= 1'b0;
+            strand2_pixel_count_swmod_q <= 1'b0;
+            strand3_pixel_count_swmod_q <= 1'b0;
             consumer_reset_pulse <= 1'b0;
         end else begin
             counter_reg <= counter_reg + 32'd1;
@@ -202,6 +243,11 @@ module pl_frame_control #(
             first_frame_word_swmod_q <= hwif_out.FIRST_FRAME_WORD.value.swmod;
             last_frame_word_swmod_q <= hwif_out.LAST_FRAME_WORD.value.swmod;
             frame_drop_notify_swmod_q <= hwif_out.FRAME_DROP_NOTIFY.value.swmod;
+            active_output_count_swmod_q <= hwif_out.ACTIVE_OUTPUT_COUNT.value.swmod;
+            strand0_pixel_count_swmod_q <= hwif_out.STRAND0_PIXEL_COUNT.value.swmod;
+            strand1_pixel_count_swmod_q <= hwif_out.STRAND1_PIXEL_COUNT.value.swmod;
+            strand2_pixel_count_swmod_q <= hwif_out.STRAND2_PIXEL_COUNT.value.swmod;
+            strand3_pixel_count_swmod_q <= hwif_out.STRAND3_PIXEL_COUNT.value.swmod;
 
             if (first_frame_word_swmod_q) begin
                 staged_first_frame_word_reg <= hwif_out.FIRST_FRAME_WORD.value.value;
@@ -213,6 +259,11 @@ module pl_frame_control #(
             if (control_clear_swmod_q && hwif_out.CONTROL.clear_errors.value) begin
                 status_reg <= STATUS_READY;
                 consumer_error_sticky_reg <= 1'b0;
+                config_invalid_sticky_reg <= 1'b0;
+            end
+
+            if (config_write_invalid) begin
+                config_invalid_sticky_reg <= 1'b1;
             end
 
             if (consumer_error_pulse) begin
