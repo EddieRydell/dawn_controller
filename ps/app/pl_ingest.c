@@ -80,6 +80,7 @@ void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot)
     snapshot->strand_pixel_count[2] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND2_PIXEL_COUNT));
     snapshot->strand_pixel_count[3] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND3_PIXEL_COUNT));
     snapshot->config_status = pl_ingest_read(PL_CONTROL_OFFSET(CONFIG_STATUS));
+    snapshot->output_invert_mask = pl_ingest_read(PL_CONTROL_OFFSET(OUTPUT_INVERT_MASK));
 }
 
 static uint32_t min_u32(uint32_t a, uint32_t b)
@@ -117,6 +118,7 @@ pl_ingest_result_t pl_ingest_get_config(pl_ingest_config_t *config)
     config->strand_pixel_count[2] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND2_PIXEL_COUNT));
     config->strand_pixel_count[3] = pl_ingest_read(PL_CONTROL_OFFSET(STRAND3_PIXEL_COUNT));
     config->config_status = pl_ingest_read(PL_CONTROL_OFFSET(CONFIG_STATUS));
+    config->output_invert_mask = pl_ingest_read(PL_CONTROL_OFFSET(OUTPUT_INVERT_MASK));
 
     config->effective_active_output_count = min_u32(config->active_output_count, config->max_output_count);
     if (config->effective_active_output_count > 4u) {
@@ -138,7 +140,7 @@ pl_ingest_result_t pl_ingest_init(uint32_t required_words)
     pl_ingest_snapshot_t snapshot;
 
     pl_ingest_snapshot(&snapshot);
-    xil_printf("pl_control=0x%08x pl_frame=0x%08x id=0x%08x version=0x%08x capacity=%u bank_words=%u active_bank=%u write_bank=%u write_valid=%u busy_bank=0x%08x status=0x%08x consumer_status=0x%08x max_outputs=%u max_pixels=%u active_outputs=%u lengths=[%u,%u,%u,%u] config_status=0x%08x\r\n",
+    xil_printf("pl_control=0x%08x pl_frame=0x%08x id=0x%08x version=0x%08x capacity=%u bank_words=%u active_bank=%u write_bank=%u write_valid=%u busy_bank=0x%08x status=0x%08x consumer_status=0x%08x max_outputs=%u max_pixels=%u active_outputs=%u lengths=[%u,%u,%u,%u] output_invert_mask=0x%08x config_status=0x%08x\r\n",
                (unsigned int)PL_CONTROL_BASEADDR,
                (unsigned int)PL_FRAME_BASEADDR,
                (unsigned int)snapshot.id,
@@ -158,6 +160,7 @@ pl_ingest_result_t pl_ingest_init(uint32_t required_words)
                (unsigned int)snapshot.strand_pixel_count[1],
                (unsigned int)snapshot.strand_pixel_count[2],
                (unsigned int)snapshot.strand_pixel_count[3],
+               (unsigned int)snapshot.output_invert_mask,
                (unsigned int)snapshot.config_status);
 
     if (snapshot.id != PL_CONTROL__ID__VALUE_reset) {
@@ -297,6 +300,12 @@ pl_ingest_result_t pl_ingest_configure_strands(uint32_t active_count, const uint
     pl_ingest_write(PL_CONTROL_OFFSET(STRAND2_PIXEL_COUNT), lengths[2]);
     pl_ingest_write(PL_CONTROL_OFFSET(STRAND3_PIXEL_COUNT), lengths[3]);
 
+    return PL_INGEST_OK;
+}
+
+pl_ingest_result_t pl_ingest_configure_output_invert_mask(uint32_t invert_mask)
+{
+    pl_ingest_write(PL_CONTROL_OFFSET(OUTPUT_INVERT_MASK), invert_mask & PL_CONTROL__OUTPUT_INVERT_MASK__VALUE_bm);
     return PL_INGEST_OK;
 }
 

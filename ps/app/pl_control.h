@@ -20,7 +20,7 @@ extern "C" {
 #define PL_CONTROL__VERSION__VALUE_bm 0xffffffff
 #define PL_CONTROL__VERSION__VALUE_bp 0
 #define PL_CONTROL__VERSION__VALUE_bw 32
-#define PL_CONTROL__VERSION__VALUE_reset 0x60000
+#define PL_CONTROL__VERSION__VALUE_reset 0x70000
 
 // reg - pl_control::CONTROL
 #define PL_CONTROL__CONTROL__RESERVED_bm 0x1
@@ -276,6 +276,12 @@ extern "C" {
 #define PL_CONTROL__CONFIG_STATUS__STRAND_LENGTH_CLAMPED_bw 4
 #define PL_CONTROL__CONFIG_STATUS__STRAND_LENGTH_CLAMPED_reset 0x0
 
+// reg - pl_control::OUTPUT_INVERT_MASK
+#define PL_CONTROL__OUTPUT_INVERT_MASK__VALUE_bm 0xf
+#define PL_CONTROL__OUTPUT_INVERT_MASK__VALUE_bp 0
+#define PL_CONTROL__OUTPUT_INVERT_MASK__VALUE_bw 4
+#define PL_CONTROL__OUTPUT_INVERT_MASK__VALUE_reset 0xf
+
 // addrmap - pl_control
 typedef struct __attribute__ ((__packed__)) {
     uint32_t ID;
@@ -316,10 +322,11 @@ typedef struct __attribute__ ((__packed__)) {
     uint32_t STRAND2_PIXEL_COUNT;
     uint32_t STRAND3_PIXEL_COUNT;
     uint32_t CONFIG_STATUS;
+    uint32_t OUTPUT_INVERT_MASK;
 } pl_control_t;
 
 
-static_assert(sizeof(pl_control_t) == 0x98, "Packing error");
+static_assert(sizeof(pl_control_t) == 0x9c, "Packing error");
 
 #ifdef __cplusplus
 }

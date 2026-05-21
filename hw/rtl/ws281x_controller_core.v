@@ -79,6 +79,7 @@ module ws281x_controller_core #(
     wire [31:0] runtime_strand1_pixel_count;
     wire [31:0] runtime_strand2_pixel_count;
     wire [31:0] runtime_strand3_pixel_count;
+    wire [OUTPUT_COUNT-1:0] runtime_output_invert_mask;
 
     pl_frame_control #(
         .AXIL_ADDR_WIDTH(AXIL_ADDR_WIDTH),
@@ -124,7 +125,8 @@ module ws281x_controller_core #(
         .runtime_strand0_pixel_count(runtime_strand0_pixel_count),
         .runtime_strand1_pixel_count(runtime_strand1_pixel_count),
         .runtime_strand2_pixel_count(runtime_strand2_pixel_count),
-        .runtime_strand3_pixel_count(runtime_strand3_pixel_count)
+        .runtime_strand3_pixel_count(runtime_strand3_pixel_count),
+        .runtime_output_invert_mask(runtime_output_invert_mask)
     );
 
     ws281x_frame_consumer #(
@@ -147,6 +149,7 @@ module ws281x_controller_core #(
         .runtime_strand1_pixel_count(runtime_strand1_pixel_count),
         .runtime_strand2_pixel_count(runtime_strand2_pixel_count),
         .runtime_strand3_pixel_count(runtime_strand3_pixel_count),
+        .runtime_output_invert_mask(runtime_output_invert_mask),
         .busy(consumer_busy),
         .reset_low(consumer_reset_low),
         .error_pulse(consumer_error_pulse),

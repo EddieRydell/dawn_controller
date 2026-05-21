@@ -7,7 +7,7 @@ module tb_ws281x_consumer;
     localparam PIXELS_PER_OUTPUT = 2;
     localparam FRAME_WORDS = 16;
     localparam [31:0] PL_CONTROL_ID_VALUE = 32'h4546_504c;
-    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0006_0000;
+    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0007_0000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ID_OFFSET = 12'h000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_VERSION_OFFSET = 12'h004;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONTROL_OFFSET = 12'h008;
@@ -37,6 +37,7 @@ module tb_ws281x_consumer;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND2_PIXEL_COUNT_OFFSET = 12'h08c;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND3_PIXEL_COUNT_OFFSET = 12'h090;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONFIG_STATUS_OFFSET = 12'h094;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_OUTPUT_INVERT_MASK_OFFSET = 12'h098;
     localparam [31:0] PL_CONTROL_STATUS_READY = 32'h0000_0001;
     localparam [31:0] PL_CONTROL_STATUS_OVERFLOW = 32'h0000_0002;
     localparam [31:0] PL_CONTROL_STATUS_COMMIT_REJECTED = 32'h0000_0008;
@@ -289,6 +290,10 @@ module tb_ws281x_consumer;
         ctl_read(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, read_data);
         if (read_data != 32'h0000_0004) begin
             $fatal(1, "default active output count is %08x", read_data);
+        end
+        ctl_read(PL_CONTROL_OUTPUT_INVERT_MASK_OFFSET, read_data);
+        if (read_data != 32'h0000_000f) begin
+            $fatal(1, "default output invert mask is %08x", read_data);
         end
         ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0003);
         ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0001);

@@ -10,8 +10,8 @@ addrmap pl_control {
 
     reg {
         name = "VERSION";
-        desc = "Register contract version. Must read 0x00060000.";
-        field { sw = r; hw = na; reset = 32'h00060000; } value[31:0];
+        desc = "Register contract version. Must read 0x00070000.";
+        field { sw = r; hw = na; reset = 32'h00070000; } value[31:0];
     } VERSION @ 12'h004;
 
     reg {
@@ -234,4 +234,10 @@ addrmap pl_control {
         field { sw = r; hw = w; reset = 1'b0; desc = "Current active output count raw value is being clamped."; } active_count_clamped[1:1];
         field { sw = r; hw = w; reset = 4'h0; desc = "Current per-strand length raw values being clamped."; } strand_length_clamped[11:8];
     } CONFIG_STATUS @ 12'h094;
+
+    reg {
+        name = "OUTPUT_INVERT_MASK";
+        desc = "Runtime WS281x output inversion mask. Bit n inverts physical output n after serialization.";
+        field { sw = rw; hw = r; reset = 4'hf; desc = "Output inversion mask. Bits above the synthesized output count are ignored."; } value[3:0];
+    } OUTPUT_INVERT_MASK @ 12'h098;
 };

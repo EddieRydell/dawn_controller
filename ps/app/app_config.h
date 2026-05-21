@@ -6,6 +6,7 @@
 #define DONDER_OUTPUT_COUNT 4u
 #define DONDER_PIXELS_PER_OUTPUT 1024u
 #define DONDER_WORDS_PER_FRAME (DONDER_OUTPUT_COUNT * DONDER_PIXELS_PER_OUTPUT)
+#define DONDER_OUTPUT_INVERT_MASK 0x0fu
 
 #define DONDER_E131_PORT 5568u
 #define DONDER_FIRST_UNIVERSE 1u
@@ -22,6 +23,7 @@ typedef struct {
     uint32_t output_count;
     uint32_t pixels_per_output;
     uint32_t words_per_frame;
+    uint32_t output_invert_mask;
     uint16_t e131_port;
     uint16_t first_universe;
     uint8_t mac[6];

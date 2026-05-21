@@ -20,10 +20,11 @@ int main(void)
     uint32_t status_ticks = 0u;
 
     xil_printf("\r\ndonder controller starting\r\n");
-    xil_printf("max_outputs=%u max_pixels_per_output=%u max_frame_words=%u e131_port=%u first_universe=%u board_ip=%u.%u.%u.%u host_test_ip=%u.%u.%u.%u\r\n",
+    xil_printf("max_outputs=%u max_pixels_per_output=%u max_frame_words=%u output_invert_mask=0x%08x e131_port=%u first_universe=%u board_ip=%u.%u.%u.%u host_test_ip=%u.%u.%u.%u\r\n",
                (unsigned int)g_app_config.output_count,
                (unsigned int)g_app_config.pixels_per_output,
                (unsigned int)g_app_config.words_per_frame,
+               (unsigned int)g_app_config.output_invert_mask,
                (unsigned int)g_app_config.e131_port,
                (unsigned int)g_app_config.first_universe,
                g_app_config.ip[0], g_app_config.ip[1], g_app_config.ip[2], g_app_config.ip[3],
@@ -38,6 +39,9 @@ int main(void)
     pl_ingest_result_t self_test_result = pl_ingest_self_test();
     if (self_test_result != PL_INGEST_OK) {
         fatal("pl_self_test", self_test_result);
+    }
+    if (pl_ingest_configure_output_invert_mask(g_app_config.output_invert_mask) != PL_INGEST_OK) {
+        fatal("pl_output_invert", -1);
     }
 
     frame_pipeline_init();

@@ -21,6 +21,7 @@ module ws281x_frame_consumer #(
     input  wire [31:0]                runtime_strand1_pixel_count,
     input  wire [31:0]                runtime_strand2_pixel_count,
     input  wire [31:0]                runtime_strand3_pixel_count,
+    input  wire [OUTPUT_COUNT-1:0]    runtime_output_invert_mask,
 
     output wire                       busy,
     output wire                       reset_low,
@@ -79,7 +80,7 @@ module ws281x_frame_consumer #(
     wire frame_read_data_fire;
     integer output_index;
 
-    assign ws281x_data = ws281x_data_reg;
+    assign ws281x_data = ws281x_data_reg ^ runtime_output_invert_mask;
     assign m_frame_rready = 1'b1;
     assign busy = tx_state_reg != TX_IDLE;
     assign reset_low = tx_state_reg == TX_RESET;

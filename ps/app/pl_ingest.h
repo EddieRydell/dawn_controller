@@ -42,6 +42,7 @@ typedef struct {
     uint32_t active_output_count;
     uint32_t strand_pixel_count[4];
     uint32_t config_status;
+    uint32_t output_invert_mask;
 } pl_ingest_snapshot_t;
 
 typedef struct {
@@ -53,6 +54,7 @@ typedef struct {
     uint32_t effective_strand_pixel_count[4];
     uint32_t required_words;
     uint32_t config_status;
+    uint32_t output_invert_mask;
 } pl_ingest_config_t;
 
 uint32_t pl_ingest_read(uint32_t offset);
@@ -62,6 +64,7 @@ pl_ingest_result_t pl_ingest_init(uint32_t required_words);
 pl_ingest_result_t pl_ingest_self_test(void);
 pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_count);
 pl_ingest_result_t pl_ingest_configure_strands(uint32_t active_count, const uint32_t lengths[4]);
+pl_ingest_result_t pl_ingest_configure_output_invert_mask(uint32_t invert_mask);
 pl_ingest_result_t pl_ingest_get_config(pl_ingest_config_t *config);
 pl_ingest_result_t pl_ingest_enable_consumer(void);
 void pl_ingest_drive_pins(uint32_t value);

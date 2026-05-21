@@ -72,7 +72,8 @@ module pl_frame_control #(
     output wire [31:0]                runtime_strand0_pixel_count,
     output wire [31:0]                runtime_strand1_pixel_count,
     output wire [31:0]                runtime_strand2_pixel_count,
-    output wire [31:0]                runtime_strand3_pixel_count
+    output wire [31:0]                runtime_strand3_pixel_count,
+    output wire [OUTPUT_COUNT-1:0]    runtime_output_invert_mask
 );
 
     import pl_control_regs_pkg::*;
@@ -145,6 +146,7 @@ module pl_frame_control #(
     assign runtime_strand1_pixel_count = strand_length_clamped[1] ? PIXELS_PER_OUTPUT : hwif_out.STRAND1_PIXEL_COUNT.value.value;
     assign runtime_strand2_pixel_count = strand_length_clamped[2] ? PIXELS_PER_OUTPUT : hwif_out.STRAND2_PIXEL_COUNT.value.value;
     assign runtime_strand3_pixel_count = strand_length_clamped[3] ? PIXELS_PER_OUTPUT : hwif_out.STRAND3_PIXEL_COUNT.value.value;
+    assign runtime_output_invert_mask = hwif_out.OUTPUT_INVERT_MASK.value.value[OUTPUT_COUNT-1:0];
 
     assign hwif_in.STATUS.ready.next = status_reg[0];
     assign hwif_in.STATUS.overflow.next = status_reg[1];

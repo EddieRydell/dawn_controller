@@ -6,7 +6,7 @@ package pl_control_regs_pkg;
 
     localparam PL_CONTROL_REGS_DATA_WIDTH = 32;
     localparam PL_CONTROL_REGS_MIN_ADDR_WIDTH = 12;
-    localparam PL_CONTROL_REGS_SIZE = 'h98;
+    localparam PL_CONTROL_REGS_SIZE = 'h9c;
 
     typedef struct {
         logic next;
@@ -383,6 +383,14 @@ package pl_control_regs_pkg;
     } pl_control__STRAND3_PIXEL_COUNT__out_t;
 
     typedef struct {
+        logic [3:0] value;
+    } pl_control__OUTPUT_INVERT_MASK__value__out_t;
+
+    typedef struct {
+        pl_control__OUTPUT_INVERT_MASK__value__out_t value;
+    } pl_control__OUTPUT_INVERT_MASK__out_t;
+
+    typedef struct {
         pl_control__CONTROL__out_t CONTROL;
         pl_control__PIN_OUT__out_t PIN_OUT;
         pl_control__FRAME_COMMIT__out_t FRAME_COMMIT;
@@ -395,5 +403,6 @@ package pl_control_regs_pkg;
         pl_control__STRAND1_PIXEL_COUNT__out_t STRAND1_PIXEL_COUNT;
         pl_control__STRAND2_PIXEL_COUNT__out_t STRAND2_PIXEL_COUNT;
         pl_control__STRAND3_PIXEL_COUNT__out_t STRAND3_PIXEL_COUNT;
+        pl_control__OUTPUT_INVERT_MASK__out_t OUTPUT_INVERT_MASK;
     } pl_control__out_t;
 endpackage
