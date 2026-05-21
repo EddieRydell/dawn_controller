@@ -16,17 +16,17 @@
 #include "xtimer_config.h"
 
 #if defined(XPAR_XEMACPS_0_BASEADDR)
-#define DONDER_EMAC_BASEADDR XPAR_XEMACPS_0_BASEADDR
+#define DAWN_EMAC_BASEADDR XPAR_XEMACPS_0_BASEADDR
 #elif defined(XPAR_PS7_ETHERNET_0_BASEADDR)
-#define DONDER_EMAC_BASEADDR XPAR_PS7_ETHERNET_0_BASEADDR
+#define DAWN_EMAC_BASEADDR XPAR_PS7_ETHERNET_0_BASEADDR
 #else
 #error "Missing PS ENET0 base address in xparameters.h"
 #endif
 
-#define DONDER_GT_COUNTER_LOWER_OFFSET 0x00u
-#define DONDER_GT_COUNTER_UPPER_OFFSET 0x04u
-#define DONDER_GT_CONTROL_OFFSET 0x08u
-#define DONDER_GT_CONTROL_ENABLE 0x01u
+#define DAWN_GT_COUNTER_LOWER_OFFSET 0x00u
+#define DAWN_GT_COUNTER_UPPER_OFFSET 0x04u
+#define DAWN_GT_CONTROL_OFFSET 0x08u
+#define DAWN_GT_CONTROL_ENABLE 0x01u
 
 static struct netif g_netif;
 static struct udp_pcb *g_udp;
@@ -46,15 +46,15 @@ static uint32_t monotonic_ms(void)
     uint32_t control;
     uint64_t ticks;
 
-    control = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + DONDER_GT_CONTROL_OFFSET);
-    if ((control & DONDER_GT_CONTROL_ENABLE) == 0u) {
-        Xil_Out32(XPAR_GLOBAL_TIMER_BASEADDR + DONDER_GT_CONTROL_OFFSET, control | DONDER_GT_CONTROL_ENABLE);
+    control = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + DAWN_GT_CONTROL_OFFSET);
+    if ((control & DAWN_GT_CONTROL_ENABLE) == 0u) {
+        Xil_Out32(XPAR_GLOBAL_TIMER_BASEADDR + DAWN_GT_CONTROL_OFFSET, control | DAWN_GT_CONTROL_ENABLE);
     }
 
     do {
-        high = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + DONDER_GT_COUNTER_UPPER_OFFSET);
-        low = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + DONDER_GT_COUNTER_LOWER_OFFSET);
-    } while (Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + DONDER_GT_COUNTER_UPPER_OFFSET) != high);
+        high = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + DAWN_GT_COUNTER_UPPER_OFFSET);
+        low = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + DAWN_GT_COUNTER_LOWER_OFFSET);
+    } while (Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + DAWN_GT_COUNTER_UPPER_OFFSET) != high);
 
     ticks = ((uint64_t)high << 32) | low;
     return (uint32_t)((ticks * 1000u) / COUNTS_PER_SECOND);
@@ -138,7 +138,7 @@ int ethernet_receiver_init(void)
     e131_receiver_init();
     lwip_init();
 
-    if (xemac_add(&g_netif, &ip, &netmask, &gateway, (unsigned char *)g_app_config.mac, DONDER_EMAC_BASEADDR) == 0) {
+    if (xemac_add(&g_netif, &ip, &netmask, &gateway, (unsigned char *)g_app_config.mac, DAWN_EMAC_BASEADDR) == 0) {
         g_counters.last_error = "xemac_add";
         return -1;
     }
@@ -168,7 +168,7 @@ int ethernet_receiver_init(void)
                g_app_config.netmask[0], g_app_config.netmask[1], g_app_config.netmask[2], g_app_config.netmask[3],
                g_app_config.gateway[0], g_app_config.gateway[1], g_app_config.gateway[2], g_app_config.gateway[3],
                (unsigned int)g_app_config.e131_port,
-               (unsigned int)DONDER_EMAC_BASEADDR,
+               (unsigned int)DAWN_EMAC_BASEADDR,
                (unsigned int)g_counters.link_up);
     return 0;
 }

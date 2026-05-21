@@ -1,4 +1,4 @@
-# Donder Controller
+# Dawn Controller
 
 Production-oriented PYNQ-Z2 foundation for Ethernet-to-PL projects and an E1.31-to-WS2811 light controller.
 
@@ -130,4 +130,4 @@ python ps/tools/e131_send.py --dest-ip 192.168.7.2 --pattern bars --packet-count
 
 The sender is send-only. UART remains the canonical observer. A successful packet test shows increasing `rx_packets`, `e131_valid`, and `frames_committed`. Malformed packets or packets outside the configured universe range increment `e131_rejected` and do not commit a frame.
 
-E1.31 universe data is accepted starting at `DONDER_FIRST_UNIVERSE`. RGB slots are interpreted as the same linear output-major stream used by PL frame RAM: output 0 pixels first, then output 1, output 2, and output 3. The PS writes those slots directly into the inactive frame bank before committing through `frame_pipeline_commit()`.
+E1.31 universe data is accepted starting at `DAWN_FIRST_UNIVERSE`. RGB slots are interpreted as the same linear output-major stream used by PL frame RAM: output 0 pixels first, then output 1, output 2, and output 3. The PS writes those slots directly into the inactive frame bank before committing through `frame_pipeline_commit()`.

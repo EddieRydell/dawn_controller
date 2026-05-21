@@ -57,7 +57,7 @@ def generate(out_root, include_docs=True):
         "-o",
         str(docs_dir),
         "--title",
-        "Donder Controller PL Control Registers",
+        "Dawn Controller PL Control Registers",
         str(RDL),
     ])
     index_html = docs_dir / "index.html"

@@ -12,8 +12,8 @@ POWERSHELL ?= powershell
 PORT ?= COM4
 BAUD ?= 115200
 
-XSA := build/vivado/donder_controller.xsa
-BITSTREAM := build/vivado/donder_controller.runs/impl_1/donder_system_wrapper.bit
+XSA := build/vivado/dawn_controller.xsa
+BITSTREAM := build/vivado/dawn_controller.runs/impl_1/dawn_system_wrapper.bit
 PS_STAMP := build/vitis/.app-built
 BOOT_BIN := build/sd/BOOT.BIN
 RTL_CHECK_DIR := build/rtl-check

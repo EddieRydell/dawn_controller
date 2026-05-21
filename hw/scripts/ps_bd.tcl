@@ -1,4 +1,4 @@
-create_bd_design "donder_system"
+create_bd_design "dawn_system"
 
 create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7 processing_system7_0
 

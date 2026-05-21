@@ -1,6 +1,6 @@
 set repo_root [file normalize [file join [file dirname [info script]] .. ..]]
 set hw_server_url "TCP:localhost:3121"
-set bit_file [file join $repo_root build vivado donder_controller.runs impl_1 donder_system_wrapper.bit]
+set bit_file [file join $repo_root build vivado dawn_controller.runs impl_1 dawn_system_wrapper.bit]
 set vitis_workspace [file join $repo_root build vitis]
 set pl_control_base 0x43C00000
 set pl_frame_base 0x43C10000
@@ -69,8 +69,8 @@ if {![file exists $bit_file]} {
     error "Missing bitstream: $bit_file"
 }
 
-set app [newest [file join $vitis_workspace * donder_controller build donder_controller.elf]]
-set fsbl [newest [file join $vitis_workspace * donder_platform zynq_fsbl build fsbl.elf]]
+set app [newest [file join $vitis_workspace * dawn_controller build dawn_controller.elf]]
+set fsbl [newest [file join $vitis_workspace * dawn_platform zynq_fsbl build fsbl.elf]]
 
 puts "CONNECT $hw_server_url"
 connect -url $hw_server_url

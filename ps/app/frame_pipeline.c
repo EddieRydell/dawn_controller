@@ -4,10 +4,10 @@
 
 #define FRAME_BANKS 2u
 
-static uint32_t g_frame_words[FRAME_BANKS][DONDER_WORDS_PER_FRAME];
+static uint32_t g_frame_words[FRAME_BANKS][DAWN_WORDS_PER_FRAME];
 static uint32_t g_write_bank;
 static uint32_t g_active_output_count;
-static uint32_t g_strand_pixel_count[DONDER_OUTPUT_COUNT];
+static uint32_t g_strand_pixel_count[DAWN_OUTPUT_COUNT];
 static uint32_t g_required_words;
 static uint32_t g_active_pixel_count;
 
@@ -16,13 +16,13 @@ static uint32_t clamp_u32(uint32_t value, uint32_t max_value)
     return value < max_value ? value : max_value;
 }
 
-static uint32_t required_words_for(uint32_t active_count, const uint32_t lengths[DONDER_OUTPUT_COUNT])
+static uint32_t required_words_for(uint32_t active_count, const uint32_t lengths[DAWN_OUTPUT_COUNT])
 {
     uint32_t required_words = 0u;
 
-    for (uint32_t output = 0u; output < DONDER_OUTPUT_COUNT; ++output) {
+    for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
         if (output < active_count && lengths[output] > 0u) {
-            uint32_t required = (output * DONDER_PIXELS_PER_OUTPUT) + lengths[output];
+            uint32_t required = (output * DAWN_PIXELS_PER_OUTPUT) + lengths[output];
             if (required > required_words) {
                 required_words = required;
             }
@@ -32,12 +32,12 @@ static uint32_t required_words_for(uint32_t active_count, const uint32_t lengths
     return required_words;
 }
 
-static void apply_local_config(uint32_t active_count, const uint32_t lengths[DONDER_OUTPUT_COUNT])
+static void apply_local_config(uint32_t active_count, const uint32_t lengths[DAWN_OUTPUT_COUNT])
 {
-    g_active_output_count = clamp_u32(active_count, DONDER_OUTPUT_COUNT);
+    g_active_output_count = clamp_u32(active_count, DAWN_OUTPUT_COUNT);
     g_active_pixel_count = 0u;
-    for (uint32_t output = 0u; output < DONDER_OUTPUT_COUNT; ++output) {
-        g_strand_pixel_count[output] = clamp_u32(lengths[output], DONDER_PIXELS_PER_OUTPUT);
+    for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
+        g_strand_pixel_count[output] = clamp_u32(lengths[output], DAWN_PIXELS_PER_OUTPUT);
         if (output < g_active_output_count) {
             g_active_pixel_count += g_strand_pixel_count[output];
         }
@@ -51,7 +51,7 @@ static int compact_pixel_to_word_index(uint32_t linear_pixel, uint32_t *word_ind
         uint32_t output_length = g_strand_pixel_count[output];
 
         if (linear_pixel < output_length) {
-            *word_index = (output * DONDER_PIXELS_PER_OUTPUT) + linear_pixel;
+            *word_index = (output * DAWN_PIXELS_PER_OUTPUT) + linear_pixel;
             return 0;
         }
         linear_pixel -= output_length;
@@ -64,7 +64,7 @@ static void clear_inactive_frame(void)
 {
     uint32_t *words = frame_pipeline_inactive_words();
 
-    for (uint32_t word = 0u; word < DONDER_WORDS_PER_FRAME; ++word) {
+    for (uint32_t word = 0u; word < DAWN_WORDS_PER_FRAME; ++word) {
         words[word] = 0u;
     }
 }
@@ -75,7 +75,7 @@ void frame_pipeline_init(void)
 
     g_write_bank = 0u;
     for (uint32_t bank = 0u; bank < FRAME_BANKS; ++bank) {
-        for (uint32_t word = 0u; word < DONDER_WORDS_PER_FRAME; ++word) {
+        for (uint32_t word = 0u; word < DAWN_WORDS_PER_FRAME; ++word) {
             g_frame_words[bank][word] = 0u;
         }
     }
@@ -83,13 +83,13 @@ void frame_pipeline_init(void)
     if (pl_ingest_get_config(&config) == PL_INGEST_OK) {
         apply_local_config(config.effective_active_output_count, config.effective_strand_pixel_count);
     } else {
-        const uint32_t default_lengths[DONDER_OUTPUT_COUNT] = {
-            DONDER_PIXELS_PER_OUTPUT,
-            DONDER_PIXELS_PER_OUTPUT,
-            DONDER_PIXELS_PER_OUTPUT,
-            DONDER_PIXELS_PER_OUTPUT,
+        const uint32_t default_lengths[DAWN_OUTPUT_COUNT] = {
+            DAWN_PIXELS_PER_OUTPUT,
+            DAWN_PIXELS_PER_OUTPUT,
+            DAWN_PIXELS_PER_OUTPUT,
+            DAWN_PIXELS_PER_OUTPUT,
         };
-        apply_local_config(DONDER_OUTPUT_COUNT, default_lengths);
+        apply_local_config(DAWN_OUTPUT_COUNT, default_lengths);
     }
 }
 
@@ -107,7 +107,7 @@ void frame_pipeline_clear_all(uint32_t rgb_word)
 {
     rgb_word &= 0x00ffffffu;
     for (uint32_t bank = 0u; bank < FRAME_BANKS; ++bank) {
-        for (uint32_t word = 0u; word < DONDER_WORDS_PER_FRAME; ++word) {
+        for (uint32_t word = 0u; word < DAWN_WORDS_PER_FRAME; ++word) {
             g_frame_words[bank][word] = rgb_word;
         }
     }
@@ -155,19 +155,19 @@ int frame_pipeline_commit(void)
     return 0;
 }
 
-int frame_pipeline_configure(uint32_t active_count, const uint32_t lengths[DONDER_OUTPUT_COUNT])
+int frame_pipeline_configure(uint32_t active_count, const uint32_t lengths[DAWN_OUTPUT_COUNT])
 {
     uint32_t new_active_count;
-    uint32_t new_lengths[DONDER_OUTPUT_COUNT];
+    uint32_t new_lengths[DAWN_OUTPUT_COUNT];
     int needs_black_frame = 0;
 
     if (lengths == 0) {
         return -1;
     }
 
-    new_active_count = clamp_u32(active_count, DONDER_OUTPUT_COUNT);
-    for (uint32_t output = 0u; output < DONDER_OUTPUT_COUNT; ++output) {
-        new_lengths[output] = clamp_u32(lengths[output], DONDER_PIXELS_PER_OUTPUT);
+    new_active_count = clamp_u32(active_count, DAWN_OUTPUT_COUNT);
+    for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
+        new_lengths[output] = clamp_u32(lengths[output], DAWN_PIXELS_PER_OUTPUT);
         if (output >= new_active_count) {
             new_lengths[output] = 0u;
         }
