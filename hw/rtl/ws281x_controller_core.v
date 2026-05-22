@@ -74,11 +74,11 @@ module ws281x_controller_core #(
     wire [31:0] consumer_error_count;
     wire [31:0] consumer_active_bank;
     wire [31:0] consumer_debug;
-    wire [31:0] runtime_active_output_count;
-    wire [31:0] runtime_strand0_pixel_count;
-    wire [31:0] runtime_strand1_pixel_count;
-    wire [31:0] runtime_strand2_pixel_count;
-    wire [31:0] runtime_strand3_pixel_count;
+    wire [$clog2(OUTPUT_COUNT+1)-1:0] runtime_active_output_count;
+    wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand0_pixel_count;
+    wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand1_pixel_count;
+    wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand2_pixel_count;
+    wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand3_pixel_count;
     wire [OUTPUT_COUNT-1:0] runtime_output_invert_mask;
 
     pl_frame_control #(
