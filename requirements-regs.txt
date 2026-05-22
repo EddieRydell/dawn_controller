@@ -2,3 +2,4 @@ peakrdl
 peakrdl-regblock[cli]
 peakrdl-cheader
 peakrdl-html
+pyserial

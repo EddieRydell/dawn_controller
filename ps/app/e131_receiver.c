@@ -18,7 +18,11 @@ static uint8_t g_last_sequence[MAX_E131_UNIVERSES];
 static uint8_t g_locked_cid[16];
 static uint32_t g_received_count;
 static uint32_t g_last_display_ms;
+static uint32_t g_last_packet_ms;
+static uint32_t g_last_commit_ms;
 static uint8_t g_has_display_time;
+static uint8_t g_has_packet_time;
+static uint8_t g_has_commit_time;
 static uint8_t g_pending_synced_complete;
 
 static uint32_t total_slots(void)
@@ -95,6 +99,32 @@ static uint32_t elapsed_ms(uint32_t now_ms, uint32_t then_ms)
     return now_ms - then_ms;
 }
 
+static void record_packet_timing(uint32_t now_ms)
+{
+    if (g_has_packet_time) {
+        uint32_t gap = elapsed_ms(now_ms, g_last_packet_ms);
+        g_status.last_packet_gap_ms = gap;
+        if (gap > g_status.max_packet_gap_ms) {
+            g_status.max_packet_gap_ms = gap;
+        }
+    }
+    g_last_packet_ms = now_ms;
+    g_has_packet_time = 1u;
+}
+
+static void record_commit_timing(uint32_t now_ms)
+{
+    if (g_has_commit_time) {
+        uint32_t gap = elapsed_ms(now_ms, g_last_commit_ms);
+        g_status.last_frame_commit_gap_ms = gap;
+        if (gap > g_status.max_frame_commit_gap_ms) {
+            g_status.max_frame_commit_gap_ms = gap;
+        }
+    }
+    g_last_commit_ms = now_ms;
+    g_has_commit_time = 1u;
+}
+
 static int commit_current(const char *reason, uint32_t now_ms)
 {
     int commit_result = frame_pipeline_commit();
@@ -105,6 +135,7 @@ static int commit_current(const char *reason, uint32_t now_ms)
         g_status.last_error = reason;
         g_last_display_ms = now_ms;
         g_has_display_time = 1u;
+        record_commit_timing(now_ms);
         clear_assembly();
         return 0;
     }
@@ -128,6 +159,7 @@ static void commit_black(uint32_t now_ms, const char *reason)
         g_status.last_error = reason;
         g_last_display_ms = now_ms;
         g_has_display_time = 1u;
+        record_commit_timing(now_ms);
     } else {
         g_status.frames_dropped++;
         g_status.last_error = "black_commit_failed";
@@ -230,11 +262,19 @@ void e131_receiver_init(void)
     g_status.sync_waits = 0u;
     g_status.sync_timeouts = 0u;
     g_status.blackouts = 0u;
+    g_status.last_packet_gap_ms = 0u;
+    g_status.max_packet_gap_ms = 0u;
+    g_status.last_frame_commit_gap_ms = 0u;
+    g_status.max_frame_commit_gap_ms = 0u;
     g_status.last_universe = 0u;
     g_status.last_sequence = 0u;
     g_status.last_error = "init";
     g_last_display_ms = 0u;
+    g_last_packet_ms = 0u;
+    g_last_commit_ms = 0u;
     g_has_display_time = 0u;
+    g_has_packet_time = 0u;
+    g_has_commit_time = 0u;
     clear_assembly();
     release_lock();
 }
@@ -261,6 +301,7 @@ void e131_receiver_handle_packet(const uint8_t *data,
         g_status.last_error = e131_parse_result_name(result);
         return;
     }
+    record_packet_timing(now_ms);
 
     if ((packet.options & E131_OPTION_PREVIEW) != 0u && DAWN_E131_ACCEPT_PREVIEW == 0u) {
         g_status.e131_rejected++;

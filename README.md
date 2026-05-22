@@ -22,7 +22,7 @@ Run from a Xilinx-enabled shell where Vivado, Vitis, Bootgen, XSDB, and hw_serve
 This will install four peakrdl dependencies globally and then test and build the project. 
 Create a python venv if you don't want the peakrdl deps installed globally.
 
-```powershell
+```sh
 python -m pip install -r requirements-regs.txt
 make clean
 make regs-check
@@ -35,19 +35,20 @@ make boot
 
 For JTAG development:
 
-```powershell
+```sh
 make run
 ```
 
 For UART telemetry:
 
-```powershell
+```sh
+make logs
 make logs PORT=COMx
 ```
 
 For a host-side E1.31 packet source:
 
-```powershell
+```sh
 make e131-send
 ```
 
@@ -110,20 +111,20 @@ UDP port: 5568
 
 Configure the host Ethernet adapter manually to `192.168.7.1` with netmask `255.255.255.0`, connect it directly to the PYNQ-Z2 Ethernet port, then run the app and observe UART logs:
 
-```powershell
+```sh
 make run
-make logs PORT=COMx
+make logs
 ```
 
 Runtime status is machine-readable:
 
 ```text
-e131_status link=... rx_packets=... rx_bytes=... e131_valid=... e131_rejected=... universes_seen=... frames_committed=... frames_dropped=... last_universe=... last_sequence=... last_error=...
+e131_status link=... rx_packets=... rx_bytes=... e131_valid=... e131_rejected=... universes_seen=... frames_committed=... frames_dropped=... packet_gap_ms=... max_packet_gap_ms=... commit_gap_ms=... max_commit_gap_ms=... last_universe=... last_sequence=... last_error=...
 ```
 
 Send E1.31 from the host:
 
-```powershell
+```sh
 make e131-send
 python ps/tools/e131_send.py --dest-ip 192.168.7.2 --pattern bars --packet-count 10 --rate 30
 ```

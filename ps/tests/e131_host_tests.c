@@ -267,9 +267,9 @@ static int test_missing_universe_blackout(void)
     for (uint32_t offset = 0u; offset < 24u; ++offset) {
         send_universe(offset, (uint8_t)offset, cid, 100u, 0u, 0u, 0u);
     }
-    e131_receiver_poll(499u);
+    e131_receiver_poll(DAWN_E131_BLACKOUT_TIMEOUT_MS - 1u);
     EXPECT_EQ(e131_receiver_status()->blackouts, 0u);
-    e131_receiver_poll(500u);
+    e131_receiver_poll(DAWN_E131_BLACKOUT_TIMEOUT_MS);
     EXPECT_EQ(e131_receiver_status()->blackouts, 1u);
     EXPECT_EQ(e131_receiver_status()->incomplete_sweeps, 1u);
     EXPECT_EQ(e131_receiver_status()->source_locked, 0u);
@@ -304,7 +304,7 @@ static int test_missing_sync_blackout(void)
     for (uint32_t offset = 0u; offset < 25u; ++offset) {
         send_universe(offset, (uint8_t)offset, cid, 100u, DAWN_E131_DEFAULT_SYNC_ADDRESS, 0u, 0u);
     }
-    e131_receiver_poll(500u);
+    e131_receiver_poll(DAWN_E131_BLACKOUT_TIMEOUT_MS);
     EXPECT_EQ(e131_receiver_status()->blackouts, 1u);
     EXPECT_EQ(e131_receiver_status()->sync_timeouts, 1u);
     return 0;
@@ -350,6 +350,35 @@ static int test_stream_terminated_blacks(void)
     return 0;
 }
 
+static int test_packet_and_commit_gap_metrics(void)
+{
+    uint8_t cid[16] = {8u};
+
+    reset_receiver();
+    send_universe(0u, 1u, cid, 100u, 0u, 0u, 10u);
+    EXPECT_EQ(e131_receiver_status()->last_packet_gap_ms, 0u);
+    EXPECT_EQ(e131_receiver_status()->max_packet_gap_ms, 0u);
+    send_universe(1u, 1u, cid, 100u, 0u, 0u, 15u);
+    EXPECT_EQ(e131_receiver_status()->last_packet_gap_ms, 5u);
+    EXPECT_EQ(e131_receiver_status()->max_packet_gap_ms, 5u);
+    send_universe(2u, 1u, cid, 100u, 0u, 0u, 35u);
+    EXPECT_EQ(e131_receiver_status()->last_packet_gap_ms, 20u);
+    EXPECT_EQ(e131_receiver_status()->max_packet_gap_ms, 20u);
+
+    for (uint32_t offset = 3u; offset < 25u; ++offset) {
+        send_universe(offset, 1u, cid, 100u, 0u, 0u, 35u);
+    }
+    EXPECT_EQ(e131_receiver_status()->last_frame_commit_gap_ms, 0u);
+    EXPECT_EQ(e131_receiver_status()->max_frame_commit_gap_ms, 0u);
+
+    for (uint32_t offset = 0u; offset < 25u; ++offset) {
+        send_universe(offset, 2u, cid, 100u, 0u, 0u, 70u);
+    }
+    EXPECT_EQ(e131_receiver_status()->last_frame_commit_gap_ms, 35u);
+    EXPECT_EQ(e131_receiver_status()->max_frame_commit_gap_ms, 35u);
+    return 0;
+}
+
 static int test_fuzz_no_commit(void)
 {
     uint8_t packet[MAX_PACKET];
@@ -390,6 +419,7 @@ int main(void)
         {"priority_policy", test_priority_policy},
         {"preview_rejected", test_preview_rejected},
         {"stream_terminated_blacks", test_stream_terminated_blacks},
+        {"packet_and_commit_gap_metrics", test_packet_and_commit_gap_metrics},
         {"fuzz_no_commit", test_fuzz_no_commit},
     };
 

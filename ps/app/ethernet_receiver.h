@@ -19,6 +19,10 @@ typedef struct {
     uint32_t sync_waits;
     uint32_t sync_timeouts;
     uint32_t blackouts;
+    uint32_t last_packet_gap_ms;
+    uint32_t max_packet_gap_ms;
+    uint32_t last_frame_commit_gap_ms;
+    uint32_t max_frame_commit_gap_ms;
     uint16_t last_universe;
     uint8_t last_sequence;
     const char *last_error;

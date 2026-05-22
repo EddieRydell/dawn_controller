@@ -77,6 +77,10 @@ static void copy_receiver_status(void)
     g_counters.sync_waits = status->sync_waits;
     g_counters.sync_timeouts = status->sync_timeouts;
     g_counters.blackouts = status->blackouts;
+    g_counters.last_packet_gap_ms = status->last_packet_gap_ms;
+    g_counters.max_packet_gap_ms = status->max_packet_gap_ms;
+    g_counters.last_frame_commit_gap_ms = status->last_frame_commit_gap_ms;
+    g_counters.max_frame_commit_gap_ms = status->max_frame_commit_gap_ms;
     g_counters.last_universe = status->last_universe;
     g_counters.last_sequence = status->last_sequence;
     g_counters.last_error = status->last_error;
@@ -193,7 +197,7 @@ void ethernet_receiver_print_status(void)
     pl_ingest_snapshot(&snapshot);
     const e131_receiver_status_t *rx = e131_receiver_status();
 
-    xil_printf("e131_status link=%u ip=%u.%u.%u.%u port=%u rx_packets=%u rx_bytes=%u e131_valid=%u e131_rejected=%u universes_seen=%u frames_committed=%u frames_dropped=%u complete_frames=%u incomplete_sweeps=%u ignored_sources=%u sequence_anomalies=%u preview_rejects=%u sync_mode=%u sync_address=%u sync_waits=%u sync_timeouts=%u blackouts=%u source_locked=%u active_priority=%u source_ip=%u.%u.%u.%u last_universe=%u last_sequence=%u last_error=%s pl_dropped=%u pl_rejected=%u consumer_frames=%u\r\n",
+    xil_printf("e131_status link=%u ip=%u.%u.%u.%u port=%u rx_packets=%u rx_bytes=%u e131_valid=%u e131_rejected=%u universes_seen=%u frames_committed=%u frames_dropped=%u complete_frames=%u incomplete_sweeps=%u ignored_sources=%u sequence_anomalies=%u preview_rejects=%u sync_mode=%u sync_address=%u sync_waits=%u sync_timeouts=%u blackouts=%u packet_gap_ms=%u max_packet_gap_ms=%u commit_gap_ms=%u max_commit_gap_ms=%u source_locked=%u active_priority=%u source_ip=%u.%u.%u.%u last_universe=%u last_sequence=%u last_error=%s pl_dropped=%u pl_rejected=%u consumer_frames=%u\r\n",
                (unsigned int)g_counters.link_up,
                g_app_config.ip[0], g_app_config.ip[1], g_app_config.ip[2], g_app_config.ip[3],
                (unsigned int)g_app_config.e131_port,
@@ -214,6 +218,10 @@ void ethernet_receiver_print_status(void)
                (unsigned int)g_counters.sync_waits,
                (unsigned int)g_counters.sync_timeouts,
                (unsigned int)g_counters.blackouts,
+               (unsigned int)g_counters.last_packet_gap_ms,
+               (unsigned int)g_counters.max_packet_gap_ms,
+               (unsigned int)g_counters.last_frame_commit_gap_ms,
+               (unsigned int)g_counters.max_frame_commit_gap_ms,
                (unsigned int)rx->source_locked,
                (unsigned int)rx->active_priority,
                rx->source_ip[0], rx->source_ip[1], rx->source_ip[2], rx->source_ip[3],
