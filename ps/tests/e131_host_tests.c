@@ -379,6 +379,25 @@ static int test_packet_and_commit_gap_metrics(void)
     return 0;
 }
 
+static int test_pl_busy_clears_assembly(void)
+{
+    uint8_t cid[16] = {9u};
+
+    reset_receiver();
+    g_commit_result = 1;
+    for (uint32_t offset = 0u; offset < 25u; ++offset) {
+        send_universe(offset, (uint8_t)offset, cid, 100u, 0u, 0u, 0u);
+    }
+    EXPECT_EQ(e131_receiver_status()->frames_dropped, 1u);
+    EXPECT_EQ(e131_receiver_status()->universes_seen, 25u);
+
+    g_commit_result = 0;
+    send_universe(0u, 25u, cid, 100u, 0u, 0u, 1u);
+    EXPECT_EQ(e131_receiver_status()->universes_seen, 26u);
+    EXPECT_EQ(g_commit_count, 0u);
+    return 0;
+}
+
 static int test_fuzz_no_commit(void)
 {
     uint8_t packet[MAX_PACKET];
@@ -420,6 +439,7 @@ int main(void)
         {"preview_rejected", test_preview_rejected},
         {"stream_terminated_blacks", test_stream_terminated_blacks},
         {"packet_and_commit_gap_metrics", test_packet_and_commit_gap_metrics},
+        {"pl_busy_clears_assembly", test_pl_busy_clears_assembly},
         {"fuzz_no_commit", test_fuzz_no_commit},
     };
 

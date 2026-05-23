@@ -150,9 +150,9 @@ def list_detected_ports():
     return list(list_ports.comports())
 
 
-def choose_port(explicit_port: str) -> str | None:
+def candidate_ports(explicit_port: str):
     if explicit_port:
-        return explicit_port
+        return [(explicit_port, explicit_port, True)]
 
     ports = list_detected_ports()
     if ports is None:
@@ -160,39 +160,40 @@ def choose_port(explicit_port: str) -> str | None:
 
     if not ports:
         print("No serial ports detected. Re-run with PORT=<port> after connecting the board.", file=sys.stderr)
-        return None
+        return []
 
     if len(ports) == 1:
         port = ports[0]
         print(f"Selected serial port {port_description(port)}")
-        return port.device
+        return [(port.device, port_description(port), False)]
 
     scored = [(score_port(port), port) for port in ports]
     best_score = max(score for score, _ in scored)
     best = [port for score, port in scored if score == best_score and score > 0]
-    if len(best) == 1:
-        port = best[0]
+    ordered = [
+        port
+        for score, port in sorted(scored, key=lambda item: (item[0], item[1].device), reverse=True)
+        if score > 0
+    ]
+    if ordered:
+        port = ordered[0]
         print(f"Selected serial port {port_description(port)}")
-        return port.device
+        if len(best) > 1:
+            print("Multiple likely serial ports detected; trying them in score order:")
+            for candidate in ordered:
+                print(f"  {port_description(candidate)} score={score_port(candidate)}")
+        return [(port.device, port_description(port), False) for port in ordered]
 
     print("Multiple serial ports detected; choose one explicitly with PORT=<port>:", file=sys.stderr)
     for score, port in sorted(scored, key=lambda item: (item[0], item[1].device), reverse=True):
         print(f"  {port_description(port)} score={score}", file=sys.stderr)
-    return None
+    return []
 
 
-def logs(args: argparse.Namespace) -> int:
-    serial, _ = import_serial()
-    if serial is None:
-        return 2
-
-    port = choose_port(args.port.strip())
-    if not port:
-        return 2
-
+def open_serial_port(serial, port: str, baud: int):
     ser = serial.Serial()
     ser.port = port
-    ser.baudrate = args.baud
+    ser.baudrate = baud
     ser.bytesize = serial.EIGHTBITS
     ser.parity = serial.PARITY_NONE
     ser.stopbits = serial.STOPBITS_ONE
@@ -202,14 +203,54 @@ def logs(args: argparse.Namespace) -> int:
     ser.dsrdtr = False
     ser.dtr = False
     ser.rts = False
+    ser.open()
+    return ser
+
+
+def logs(args: argparse.Namespace) -> int:
+    serial, _ = import_serial()
+    if serial is None:
+        return 2
 
     try:
-        try:
-            ser.open()
-        except serial.SerialException as exc:
-            print(f"Could not open serial port {port}: {exc}", file=sys.stderr)
+        sys.stdout.reconfigure(errors="replace")
+    except AttributeError:
+        pass
+
+    candidates = candidate_ports(args.port.strip())
+    if candidates is None:
+        return 2
+    if not candidates:
+        return 2
+
+    ser = None
+
+    try:
+        errors = []
+        for port, description, explicit in candidates:
+            try:
+                if description != port:
+                    print(f"Opening {description}")
+                ser = open_serial_port(serial, port, args.baud)
+                break
+            except serial.SerialException as exc:
+                errors.append((port, exc))
+                if explicit:
+                    print(f"Could not open serial port {port}: {exc}", file=sys.stderr)
+                    return 2
+                print(f"Could not open serial port {port}: {exc}", file=sys.stderr)
+                continue
+        if ser is None:
+            if len(errors) == 1:
+                print(
+                    "The auto-detected port could not be opened. Close any terminal, Vitis, "
+                    "Vivado serial console, or other process using it and retry.",
+                    file=sys.stderr,
+                )
+            else:
+                print("No auto-detected serial port could be opened.", file=sys.stderr)
             return 2
-        print(f"Streaming {port} at {args.baud} baud. Press Ctrl+C to stop.")
+        print(f"Streaming {ser.port} at {args.baud} baud. Press Ctrl+C to stop.")
         while True:
             line = ser.readline()
             if line:
@@ -217,7 +258,7 @@ def logs(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         return 130
     finally:
-        if ser.is_open:
+        if ser is not None and ser.is_open:
             ser.close()
     return 0
 

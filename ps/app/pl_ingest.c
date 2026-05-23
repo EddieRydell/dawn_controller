@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "sleep.h"
 #include "xil_io.h"
 #include "xil_printf.h"
 #include "xparameters.h"
@@ -27,6 +28,8 @@
 #endif
 
 #define PL_CONTROL_OFFSET(reg) ((uint32_t)offsetof(pl_control_t, reg))
+#define PL_INGEST_BANK_WAIT_TRIES 30u
+#define PL_INGEST_BANK_WAIT_US 100u
 
 uint32_t pl_ingest_read(uint32_t offset)
 {
@@ -51,6 +54,18 @@ static void pl_frame_write_word(size_t index, uint32_t value)
 static uint32_t expected_next(uint32_t value)
 {
     return value + 1u;
+}
+
+static int wait_for_write_bank(pl_ingest_snapshot_t *snapshot)
+{
+    for (uint32_t i = 0u; i < PL_INGEST_BANK_WAIT_TRIES; ++i) {
+        pl_ingest_snapshot(snapshot);
+        if ((snapshot->write_bank_valid & PL_CONTROL__WRITE_BANK_VALID__VALUE_bm) != 0u) {
+            return 0;
+        }
+        usleep(PL_INGEST_BANK_WAIT_US);
+    }
+    return -1;
 }
 
 void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot)
@@ -231,9 +246,6 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
     }
 
     pl_ingest_snapshot(&before);
-    bank_words = before.bank_words;
-    write_bank = before.write_bank;
-    bank_offset = (size_t)write_bank * (size_t)bank_words;
 
     if ((before.status & PL_CONTROL__STATUS__READY_bm) == 0u
         || (before.status & (PL_CONTROL__STATUS__OVERFLOW_bm
@@ -241,12 +253,16 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
                              | PL_CONTROL__STATUS__COMMIT_REJECTED_bm)) != 0u) {
         return PL_INGEST_BAD_STATUS;
     }
-    if (write_bank > 1u || word_count > bank_words || word_count > PL_CONTROL__FRAME_COMMIT__WORD_COUNT_bm) {
-        return PL_INGEST_CAPACITY_TOO_SMALL;
-    }
-    if ((before.write_bank_valid & PL_CONTROL__WRITE_BANK_VALID__VALUE_bm) == 0u) {
+    if ((before.write_bank_valid & PL_CONTROL__WRITE_BANK_VALID__VALUE_bm) == 0u
+        && wait_for_write_bank(&before) != 0) {
         pl_ingest_write(PL_CONTROL_OFFSET(FRAME_DROP_NOTIFY), PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bm);
         return PL_INGEST_NO_FREE_BANK;
+    }
+    bank_words = before.bank_words;
+    write_bank = before.write_bank;
+    bank_offset = (size_t)write_bank * (size_t)bank_words;
+    if (write_bank > 1u || word_count > bank_words || word_count > PL_CONTROL__FRAME_COMMIT__WORD_COUNT_bm) {
+        return PL_INGEST_CAPACITY_TOO_SMALL;
     }
 
     for (size_t i = 0u; i < word_count; ++i) {
@@ -277,6 +293,97 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
         || after.active_bank != write_bank
         || after.write_bank != (write_bank ^ 1u)
         || after.committed_words != word_count
+        || (after.status & PL_CONTROL__STATUS__READY_bm) == 0u
+        || (after.status & (PL_CONTROL__STATUS__OVERFLOW_bm
+                            | PL_CONTROL__STATUS__CONSUMER_ERROR_bm
+                            | PL_CONTROL__STATUS__COMMIT_REJECTED_bm)) != 0u
+        || after.frame_rejected != before.frame_rejected) {
+        return PL_INGEST_COMMIT_FAILED;
+    }
+
+    return PL_INGEST_OK;
+}
+
+pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
+                                                 uint32_t active_count,
+                                                 const uint32_t lengths[4],
+                                                 uint32_t pixels_per_output,
+                                                 uint32_t required_words)
+{
+    pl_ingest_snapshot_t before;
+    pl_ingest_snapshot_t after;
+    uint32_t bank_words;
+    uint32_t write_bank;
+    size_t bank_offset;
+    uint32_t commit_value;
+    uint32_t first_word = 0u;
+    uint32_t last_word = 0u;
+    uint32_t have_last = 0u;
+
+    if (words == NULL && required_words > 0u) {
+        return PL_INGEST_BAD_ARGUMENT;
+    }
+    if (lengths == NULL || active_count > 4u || pixels_per_output == 0u) {
+        return PL_INGEST_BAD_ARGUMENT;
+    }
+
+    pl_ingest_snapshot(&before);
+
+    if ((before.status & PL_CONTROL__STATUS__READY_bm) == 0u
+        || (before.status & (PL_CONTROL__STATUS__OVERFLOW_bm
+                             | PL_CONTROL__STATUS__CONSUMER_ERROR_bm
+                             | PL_CONTROL__STATUS__COMMIT_REJECTED_bm)) != 0u) {
+        return PL_INGEST_BAD_STATUS;
+    }
+    if ((before.write_bank_valid & PL_CONTROL__WRITE_BANK_VALID__VALUE_bm) == 0u
+        && wait_for_write_bank(&before) != 0) {
+        pl_ingest_write(PL_CONTROL_OFFSET(FRAME_DROP_NOTIFY), PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bm);
+        return PL_INGEST_NO_FREE_BANK;
+    }
+    bank_words = before.bank_words;
+    write_bank = before.write_bank;
+    bank_offset = (size_t)write_bank * (size_t)bank_words;
+    if (write_bank > 1u || required_words > bank_words || required_words > PL_CONTROL__FRAME_COMMIT__WORD_COUNT_bm) {
+        return PL_INGEST_CAPACITY_TOO_SMALL;
+    }
+
+    for (uint32_t output = 0u; output < active_count; ++output) {
+        uint32_t output_base = output * pixels_per_output;
+        for (uint32_t pixel = 0u; pixel < lengths[output]; ++pixel) {
+            uint32_t word_index = output_base + pixel;
+            if (word_index >= required_words) {
+                return PL_INGEST_BAD_ARGUMENT;
+            }
+            pl_frame_write_word(bank_offset + word_index, words[word_index]);
+        }
+        if (lengths[output] > 0u) {
+            last_word = words[output_base + lengths[output] - 1u];
+            have_last = 1u;
+        }
+    }
+
+    if (required_words > 0u) {
+        first_word = words[0];
+    }
+    pl_ingest_write(PL_CONTROL_OFFSET(FIRST_FRAME_WORD), first_word);
+    pl_ingest_write(PL_CONTROL_OFFSET(LAST_FRAME_WORD), have_last ? last_word : 0u);
+
+    if (required_words > 0u && pl_frame_read_word(bank_offset) != words[0]) {
+        return PL_INGEST_READBACK_FAILED;
+    }
+    if (have_last && pl_frame_read_word(bank_offset + required_words - 1u) != last_word) {
+        return PL_INGEST_READBACK_FAILED;
+    }
+
+    commit_value = (write_bank << PL_CONTROL__FRAME_COMMIT__BANK_bp) | required_words;
+    pl_ingest_write(PL_CONTROL_OFFSET(FRAME_COMMIT), commit_value);
+
+    pl_ingest_snapshot(&after);
+    if (after.frame_count != expected_next(before.frame_count)
+        || after.frame_sequence != expected_next(before.frame_sequence)
+        || after.active_bank != write_bank
+        || after.write_bank != (write_bank ^ 1u)
+        || after.committed_words != required_words
         || (after.status & PL_CONTROL__STATUS__READY_bm) == 0u
         || (after.status & (PL_CONTROL__STATUS__OVERFLOW_bm
                             | PL_CONTROL__STATUS__CONSUMER_ERROR_bm

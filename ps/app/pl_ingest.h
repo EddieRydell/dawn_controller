@@ -63,6 +63,11 @@ void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot);
 pl_ingest_result_t pl_ingest_init(uint32_t required_words);
 pl_ingest_result_t pl_ingest_self_test(void);
 pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_count);
+pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
+                                                 uint32_t active_count,
+                                                 const uint32_t lengths[4],
+                                                 uint32_t pixels_per_output,
+                                                 uint32_t required_words);
 pl_ingest_result_t pl_ingest_configure_strands(uint32_t active_count, const uint32_t lengths[4]);
 pl_ingest_result_t pl_ingest_configure_output_invert_mask(uint32_t invert_mask);
 pl_ingest_result_t pl_ingest_get_config(pl_ingest_config_t *config);

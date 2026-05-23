@@ -185,6 +185,11 @@ void ethernet_receiver_poll(void)
     copy_receiver_status();
 }
 
+uint32_t ethernet_receiver_now_ms(void)
+{
+    return monotonic_ms();
+}
+
 const ethernet_receiver_counters_t *ethernet_receiver_counters(void)
 {
     return &g_counters;

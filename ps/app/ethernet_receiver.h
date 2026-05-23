@@ -31,6 +31,7 @@ typedef struct {
 
 int ethernet_receiver_init(void);
 void ethernet_receiver_poll(void);
+uint32_t ethernet_receiver_now_ms(void);
 const ethernet_receiver_counters_t *ethernet_receiver_counters(void);
 void ethernet_receiver_print_status(void);
 

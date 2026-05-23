@@ -17,7 +17,7 @@ static void fatal(const char *message, int code)
 
 int main(void)
 {
-    uint32_t status_ticks = 0u;
+    uint32_t last_status_ms;
 
     xil_printf("\r\ndawn controller starting\r\n");
     xil_printf("max_outputs=%u max_pixels_per_output=%u max_frame_words=%u output_invert_mask=0x%08x e131_port=%u first_universe=%u board_ip=%u.%u.%u.%u host_test_ip=%u.%u.%u.%u\r\n",
@@ -77,12 +77,16 @@ int main(void)
     }
     xil_printf("foundation ready source=e131\r\n");
     ethernet_receiver_print_status();
+    last_status_ms = ethernet_receiver_now_ms();
 
     while (1) {
+        uint32_t now_ms;
+
         ethernet_receiver_poll();
-        status_ticks++;
-        if ((status_ticks % 100000u) == 0u) {
+        now_ms = ethernet_receiver_now_ms();
+        if ((uint32_t)(now_ms - last_status_ms) >= 1000u) {
             ethernet_receiver_print_status();
+            last_status_ms = now_ms;
         }
     }
 }

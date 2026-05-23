@@ -142,6 +142,7 @@ static int commit_current(const char *reason, uint32_t now_ms)
     if (commit_result > 0) {
         g_status.frames_dropped++;
         g_status.last_error = "pl_busy";
+        clear_assembly();
         return 1;
     }
 

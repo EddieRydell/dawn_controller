@@ -142,7 +142,11 @@ int frame_pipeline_write_linear_rgb(uint32_t first_pixel, const uint8_t *rgb_slo
 
 int frame_pipeline_commit(void)
 {
-    pl_ingest_result_t result = pl_ingest_write_frame(frame_pipeline_inactive_words(), g_required_words);
+    pl_ingest_result_t result = pl_ingest_write_frame_strands(frame_pipeline_inactive_words(),
+                                                              g_active_output_count,
+                                                              g_strand_pixel_count,
+                                                              DAWN_PIXELS_PER_OUTPUT,
+                                                              g_required_words);
 
     if (result == PL_INGEST_NO_FREE_BANK) {
         return 1;
