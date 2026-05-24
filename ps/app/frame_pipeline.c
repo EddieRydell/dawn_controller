@@ -8,6 +8,7 @@ static uint32_t g_frame_words[FRAME_BANKS][DAWN_WORDS_PER_FRAME];
 static uint32_t g_write_bank;
 static uint32_t g_active_output_count;
 static uint32_t g_strand_pixel_count[DAWN_OUTPUT_COUNT];
+static uint32_t g_output_base_word[DAWN_OUTPUT_COUNT];
 static uint32_t g_required_words;
 static uint32_t g_active_pixel_count;
 
@@ -22,7 +23,7 @@ static uint32_t required_words_for(uint32_t active_count, const uint32_t lengths
 
     for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
         if (output < active_count && lengths[output] > 0u) {
-            uint32_t required = (output * DAWN_PIXELS_PER_OUTPUT) + lengths[output];
+            uint32_t required = g_output_base_word[output] + lengths[output];
             if (required > required_words) {
                 required_words = required;
             }
@@ -37,6 +38,7 @@ static void apply_local_config(uint32_t active_count, const uint32_t lengths[DAW
     g_active_output_count = clamp_u32(active_count, DAWN_OUTPUT_COUNT);
     g_active_pixel_count = 0u;
     for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
+        g_output_base_word[output] = output == 0u ? 0u : (g_output_base_word[output - 1u] + DAWN_PIXELS_PER_OUTPUT);
         g_strand_pixel_count[output] = clamp_u32(lengths[output], DAWN_PIXELS_PER_OUTPUT);
         if (output < g_active_output_count) {
             g_active_pixel_count += g_strand_pixel_count[output];
@@ -51,7 +53,7 @@ static int compact_pixel_to_word_index(uint32_t linear_pixel, uint32_t *word_ind
         uint32_t output_length = g_strand_pixel_count[output];
 
         if (linear_pixel < output_length) {
-            *word_index = (output * DAWN_PIXELS_PER_OUTPUT) + linear_pixel;
+            *word_index = g_output_base_word[output] + linear_pixel;
             return 0;
         }
         linear_pixel -= output_length;
@@ -83,13 +85,13 @@ void frame_pipeline_init(void)
     if (pl_ingest_get_config(&config) == PL_INGEST_OK) {
         apply_local_config(config.effective_active_output_count, config.effective_strand_pixel_count);
     } else {
-        const uint32_t default_lengths[DAWN_OUTPUT_COUNT] = {
-            DAWN_PIXELS_PER_OUTPUT,
-            DAWN_PIXELS_PER_OUTPUT,
-            DAWN_PIXELS_PER_OUTPUT,
-            DAWN_PIXELS_PER_OUTPUT,
-        };
-        apply_local_config(DAWN_OUTPUT_COUNT, default_lengths);
+        uint32_t default_lengths[DAWN_OUTPUT_COUNT];
+        for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
+            default_lengths[output] = output < DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT
+                ? DAWN_DEFAULT_STRAND_PIXEL_COUNT
+                : 0u;
+        }
+        apply_local_config(DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT, default_lengths);
     }
 }
 

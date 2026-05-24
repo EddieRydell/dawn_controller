@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "generated/pl_config.h"
 #include "pl_control.h"
 
 typedef enum {
@@ -40,21 +41,23 @@ typedef struct {
     uint32_t consumer_frame_count;
     uint32_t consumer_error_count;
     uint32_t active_output_count;
-    uint32_t strand_pixel_count[4];
+    uint32_t strand_pixel_count[DAWN_PL_OUTPUT_COUNT];
     uint32_t config_status;
-    uint32_t output_invert_mask;
+    uint32_t strand_length_clamped[DAWN_PL_MASK_WORD_COUNT];
+    uint32_t output_invert_mask[DAWN_PL_MASK_WORD_COUNT];
 } pl_ingest_snapshot_t;
 
 typedef struct {
     uint32_t max_output_count;
     uint32_t max_pixels_per_output;
     uint32_t active_output_count;
-    uint32_t strand_pixel_count[4];
+    uint32_t strand_pixel_count[DAWN_PL_OUTPUT_COUNT];
     uint32_t effective_active_output_count;
-    uint32_t effective_strand_pixel_count[4];
+    uint32_t effective_strand_pixel_count[DAWN_PL_OUTPUT_COUNT];
     uint32_t required_words;
     uint32_t config_status;
-    uint32_t output_invert_mask;
+    uint32_t strand_length_clamped[DAWN_PL_MASK_WORD_COUNT];
+    uint32_t output_invert_mask[DAWN_PL_MASK_WORD_COUNT];
 } pl_ingest_config_t;
 
 uint32_t pl_ingest_read(uint32_t offset);
@@ -65,10 +68,10 @@ pl_ingest_result_t pl_ingest_self_test(void);
 pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_count);
 pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
                                                  uint32_t active_count,
-                                                 const uint32_t lengths[4],
+                                                 const uint32_t lengths[DAWN_PL_OUTPUT_COUNT],
                                                  uint32_t pixels_per_output,
                                                  uint32_t required_words);
-pl_ingest_result_t pl_ingest_configure_strands(uint32_t active_count, const uint32_t lengths[4]);
+pl_ingest_result_t pl_ingest_configure_strands(uint32_t active_count, const uint32_t lengths[DAWN_PL_OUTPUT_COUNT]);
 pl_ingest_result_t pl_ingest_configure_output_invert_mask(uint32_t invert_mask);
 pl_ingest_result_t pl_ingest_get_config(pl_ingest_config_t *config);
 pl_ingest_result_t pl_ingest_enable_consumer(void);

@@ -20,10 +20,13 @@ int main(void)
     uint32_t last_status_ms;
 
     xil_printf("\r\ndawn controller starting\r\n");
-    xil_printf("max_outputs=%u max_pixels_per_output=%u max_frame_words=%u output_invert_mask=0x%08x e131_port=%u first_universe=%u board_ip=%u.%u.%u.%u host_test_ip=%u.%u.%u.%u\r\n",
+    xil_printf("max_outputs=%u pin_outputs=%u max_pixels_per_output=%u max_frame_words=%u default_active=%u default_pixels=%u output_invert_mask=0x%08x e131_port=%u first_universe=%u board_ip=%u.%u.%u.%u host_test_ip=%u.%u.%u.%u\r\n",
                (unsigned int)g_app_config.output_count,
+               (unsigned int)g_app_config.pin_output_count,
                (unsigned int)g_app_config.pixels_per_output,
                (unsigned int)g_app_config.words_per_frame,
+               (unsigned int)g_app_config.default_active_output_count,
+               (unsigned int)g_app_config.default_strand_pixel_count,
                (unsigned int)g_app_config.output_invert_mask,
                (unsigned int)g_app_config.e131_port,
                (unsigned int)g_app_config.first_universe,
@@ -45,17 +48,17 @@ int main(void)
     }
 
     frame_pipeline_init();
-    const uint32_t startup_lengths[DAWN_OUTPUT_COUNT] = {
-        50u,
-        50u,
-        50u,
-        50u,
-    };
-    if (frame_pipeline_configure(DAWN_OUTPUT_COUNT, startup_lengths) != 0) {
+    uint32_t startup_lengths[DAWN_OUTPUT_COUNT];
+    for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
+        startup_lengths[output] = output < DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT
+            ? DAWN_DEFAULT_STRAND_PIXEL_COUNT
+            : 0u;
+    }
+    if (frame_pipeline_configure(DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT, startup_lengths) != 0) {
         fatal("startup_configure", -1);
     }
-    xil_printf("strand_config active_outputs=%u lengths=[%u,%u,%u,%u] e131_pixels=%u e131_channels=%u\r\n",
-               (unsigned int)DAWN_OUTPUT_COUNT,
+    xil_printf("strand_config active_outputs=%u first_lengths=[%u,%u,%u,%u] e131_pixels=%u e131_channels=%u\r\n",
+               (unsigned int)DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT,
                (unsigned int)startup_lengths[0],
                (unsigned int)startup_lengths[1],
                (unsigned int)startup_lengths[2],

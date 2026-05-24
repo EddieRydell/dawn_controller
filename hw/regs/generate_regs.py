@@ -11,7 +11,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RDL = REPO_ROOT / "hw" / "regs" / "pl_control.rdl"
 PS_HEADER = REPO_ROOT / "ps" / "app" / "pl_control.h"
+PS_CONFIG_HEADER = REPO_ROOT / "ps" / "app" / "generated" / "pl_config.h"
+PY_CONFIG = REPO_ROOT / "ps" / "tools" / "generated" / "pl_config.py"
 RTL_DIR = REPO_ROOT / "hw" / "rtl" / "generated"
+RTL_CONFIG = RTL_DIR / "pl_config_pkg.sv"
+TCL_CONFIG = REPO_ROOT / "hw" / "scripts" / "generated" / "pl_config.tcl"
 DOCS_DIR = REPO_ROOT / "build" / "docs" / "regs" / "pl_control"
 
 
@@ -19,7 +23,95 @@ def run(cmd):
     subprocess.run(cmd, cwd=REPO_ROOT, check=True)
 
 
+def ceil_log2(value):
+    width = 0
+    limit = 1
+    while limit < value:
+        width += 1
+        limit <<= 1
+    return width
+
+
+def read_config():
+    config = {}
+    pattern = re.compile(r"^\s*//\s*dawn_config\s+([A-Z0-9_]+)\s*=\s*([0-9]+)\s*$")
+    for line in RDL.read_text().splitlines():
+        match = pattern.match(line)
+        if match:
+            config[match.group(1)] = int(match.group(2), 10)
+
+    required = [
+        "OUTPUT_COUNT",
+        "PIN_OUTPUT_COUNT",
+        "PIXELS_PER_OUTPUT",
+        "DEFAULT_ACTIVE_OUTPUT_COUNT",
+        "DEFAULT_STRAND_PIXEL_COUNT",
+        "DEFAULT_OUTPUT_INVERT_MASK",
+        "WS281X_BIT_RATE",
+    ]
+    missing = [name for name in required if name not in config]
+    if missing:
+        raise RuntimeError(f"Missing dawn_config entries in {RDL}: {', '.join(missing)}")
+
+    config["FRAME_BANKS"] = 2
+    config["FRAME_WORDS_PER_BANK"] = config["OUTPUT_COUNT"] * config["PIXELS_PER_OUTPUT"]
+    config["FRAME_WORDS"] = config["FRAME_BANKS"] * config["FRAME_WORDS_PER_BANK"]
+    config["FRAME_BYTES"] = config["FRAME_WORDS"] * 4
+    config["FRAME_ADDR_WIDTH"] = ceil_log2(config["FRAME_BYTES"])
+    config["FRAME_RANGE_BYTES"] = 1 << config["FRAME_ADDR_WIDTH"]
+    config["MASK_WORD_COUNT"] = (config["OUTPUT_COUNT"] + 31) // 32
+    config["OUTPUT_INDEX_WIDTH"] = ceil_log2(config["OUTPUT_COUNT"])
+    config["ACTIVE_OUTPUT_WIDTH"] = ceil_log2(config["OUTPUT_COUNT"] + 1)
+    config["PIXEL_COUNT_WIDTH"] = ceil_log2(config["PIXELS_PER_OUTPUT"] + 1)
+    return config
+
+
+def write_if_changed(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, newline="")
+
+
+def emit_config_artifacts(out_root, config):
+    ps_config = out_root / "ps" / "app" / "generated" / "pl_config.h"
+    rtl_config = out_root / "hw" / "rtl" / "generated" / "pl_config_pkg.sv"
+    tcl_config = out_root / "hw" / "scripts" / "generated" / "pl_config.tcl"
+    py_config = out_root / "ps" / "tools" / "generated" / "pl_config.py"
+
+    c_lines = [
+        "/* Generated from hw/regs/pl_control.rdl. Do not edit. */",
+        "#ifndef PL_CONFIG_H",
+        "#define PL_CONFIG_H",
+        "",
+    ]
+    for name, value in config.items():
+        c_lines.append(f"#define DAWN_PL_{name} {value}u")
+    c_lines.extend(["", "#endif", ""])
+    write_if_changed(ps_config, "\n".join(c_lines))
+
+    sv_lines = [
+        "`timescale 1ns / 1ps",
+        "package pl_config_pkg;",
+    ]
+    for name, value in config.items():
+        sv_lines.append(f"    localparam int {name} = {value};")
+    sv_lines.extend(["endpackage", ""])
+    write_if_changed(rtl_config, "\n".join(sv_lines))
+
+    tcl_lines = ["# Generated from hw/regs/pl_control.rdl. Do not edit."]
+    for name, value in config.items():
+        tcl_lines.append(f"set dawn_pl_{name.lower()} {value}")
+    tcl_lines.append("")
+    write_if_changed(tcl_config, "\n".join(tcl_lines))
+
+    py_lines = ["# Generated from hw/regs/pl_control.rdl. Do not edit."]
+    for name, value in config.items():
+        py_lines.append(f"{name} = {value}")
+    py_lines.append("")
+    write_if_changed(py_config, "\n".join(py_lines))
+
+
 def generate(out_root, include_docs=True):
+    config = read_config()
     out_root.mkdir(parents=True, exist_ok=True)
     ps_header = out_root / "ps" / "app" / "pl_control.h"
     rtl_dir = out_root / "hw" / "rtl" / "generated"
@@ -46,6 +138,7 @@ def generate(out_root, include_docs=True):
         text = sv.read_text()
         if not text.startswith("`timescale"):
             sv.write_text("`timescale 1ns / 1ps\n" + text, newline="")
+    emit_config_artifacts(out_root, config)
     if not include_docs:
         return
 
@@ -68,7 +161,13 @@ def generate(out_root, include_docs=True):
 
 
 def copy_generated(src_root):
+    PS_CONFIG_HEADER.parent.mkdir(parents=True, exist_ok=True)
+    PY_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    TCL_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src_root / "ps" / "app" / "pl_control.h", PS_HEADER)
+    shutil.copy2(src_root / "ps" / "app" / "generated" / "pl_config.h", PS_CONFIG_HEADER)
+    shutil.copy2(src_root / "ps" / "tools" / "generated" / "pl_config.py", PY_CONFIG)
+    shutil.copy2(src_root / "hw" / "scripts" / "generated" / "pl_config.tcl", TCL_CONFIG)
     RTL_DIR.mkdir(parents=True, exist_ok=True)
     for path in RTL_DIR.glob("*"):
         if path.is_file():
@@ -102,6 +201,13 @@ def check_generated(src_root):
     differences = []
     if not PS_HEADER.exists() or not filecmp.cmp(src_root / "ps" / "app" / "pl_control.h", PS_HEADER, shallow=False):
         differences.append(str(PS_HEADER.relative_to(REPO_ROOT)))
+    for src, dst in [
+        (src_root / "ps" / "app" / "generated" / "pl_config.h", PS_CONFIG_HEADER),
+        (src_root / "ps" / "tools" / "generated" / "pl_config.py", PY_CONFIG),
+        (src_root / "hw" / "scripts" / "generated" / "pl_config.tcl", TCL_CONFIG),
+    ]:
+        if not dst.exists() or not filecmp.cmp(src, dst, shallow=False):
+            differences.append(str(dst.relative_to(REPO_ROOT)))
     differences.extend(compare_dirs(src_root / "hw" / "rtl" / "generated", RTL_DIR))
     return differences
 

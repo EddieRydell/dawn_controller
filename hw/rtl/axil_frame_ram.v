@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 
 module axil_frame_ram #(
-    parameter AXIL_ADDR_WIDTH = 15
+    parameter AXIL_ADDR_WIDTH = 19,
+    parameter FRAME_WORDS = 61440
 ) (
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 aclk CLK", X_INTERFACE_PARAMETER = "ASSOCIATED_BUSIF S_AXI, ASSOCIATED_RESET aresetn" *)
     input  wire                       aclk,
@@ -63,7 +64,7 @@ module axil_frame_ram #(
     localparam VALID_ADDR_WIDTH = AXIL_ADDR_WIDTH - 2;
 
     (* ram_style = "block" *)
-    reg [31:0] mem[(2**VALID_ADDR_WIDTH)-1:0];
+    reg [23:0] mem[FRAME_WORDS-1:0];
 
     reg [AXIL_ADDR_WIDTH-1:0] awaddr_reg;
     reg [31:0] wdata_reg;
@@ -143,7 +144,7 @@ module axil_frame_ram #(
                 write_strb = w_seen_reg ? wstrb_reg : s_axi_wstrb;
 
                 for (i = 0; i < 4; i = i + 1) begin
-                    if (write_strb[i]) begin
+                    if (write_strb[i] && i < 3) begin
                         mem[write_addr[AXIL_ADDR_WIDTH-1:2]][i*8 +: 8] <= write_data[i*8 +: 8];
                     end
                 end
@@ -157,7 +158,7 @@ module axil_frame_ram #(
 
             if (!s_axi_rvalid_reg && s_axi_arvalid) begin
                 s_axi_arready_reg <= 1'b1;
-                s_axi_rdata_reg <= mem[s_axi_araddr[AXIL_ADDR_WIDTH-1:2]];
+                s_axi_rdata_reg <= {8'h00, mem[s_axi_araddr[AXIL_ADDR_WIDTH-1:2]]};
                 s_axi_rvalid_reg <= 1'b1;
             end else if (s_axi_rvalid_reg && s_axi_rready) begin
                 s_axi_rvalid_reg <= 1'b0;
@@ -165,7 +166,7 @@ module axil_frame_ram #(
 
             if (!rd_rvalid_reg && rd_arvalid) begin
                 rd_arready_reg <= 1'b1;
-                rd_rdata_reg <= mem[rd_araddr[AXIL_ADDR_WIDTH-1:2]];
+                rd_rdata_reg <= {8'h00, mem[rd_araddr[AXIL_ADDR_WIDTH-1:2]]};
                 rd_rvalid_reg <= 1'b1;
             end else if (rd_rvalid_reg && rd_rready) begin
                 rd_rvalid_reg <= 1'b0;

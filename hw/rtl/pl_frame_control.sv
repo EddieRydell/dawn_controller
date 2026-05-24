@@ -2,9 +2,10 @@
 
 module pl_frame_control #(
     parameter AXIL_ADDR_WIDTH = 12,
-    parameter FRAME_WORDS = 8192,
-    parameter OUTPUT_COUNT = 4,
-    parameter PIXELS_PER_OUTPUT = 1024
+    parameter FRAME_WORDS = pl_config_pkg::FRAME_WORDS,
+    parameter OUTPUT_COUNT = pl_config_pkg::OUTPUT_COUNT,
+    parameter PIXELS_PER_OUTPUT = pl_config_pkg::PIXELS_PER_OUTPUT,
+    parameter MASK_WORD_COUNT = pl_config_pkg::MASK_WORD_COUNT
 ) (
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 aclk CLK", X_INTERFACE_PARAMETER = "ASSOCIATED_BUSIF S_AXI, ASSOCIATED_RESET aresetn" *)
     input  wire                       aclk,
@@ -69,10 +70,7 @@ module pl_frame_control #(
     output wire [31:0]                committed_words,
     output wire [31:0]                frame_sequence,
     output logic [$clog2(OUTPUT_COUNT+1)-1:0] runtime_active_output_count,
-    output logic [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand0_pixel_count,
-    output logic [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand1_pixel_count,
-    output logic [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand2_pixel_count,
-    output logic [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand3_pixel_count,
+    output logic [(OUTPUT_COUNT*$clog2(PIXELS_PER_OUTPUT+1))-1:0] runtime_strand_pixel_count,
     output logic [OUTPUT_COUNT-1:0]    runtime_output_invert_mask
 );
 
@@ -113,17 +111,15 @@ module pl_frame_control #(
     logic last_frame_word_swmod_q;
     logic frame_drop_notify_swmod_q;
     logic active_output_count_swmod_q;
-    logic strand0_pixel_count_swmod_q;
-    logic strand1_pixel_count_swmod_q;
-    logic strand2_pixel_count_swmod_q;
-    logic strand3_pixel_count_swmod_q;
+    logic strand_pixel_count_swmod_q [0:OUTPUT_COUNT-1];
 
     wire [31:0] commit_value;
     wire [31:0] write_bank_value;
     wire write_bank_valid_value;
     wire active_output_count_clamped;
-    wire [3:0] strand_length_clamped;
-    wire config_write_invalid;
+    logic [OUTPUT_COUNT-1:0] strand_length_clamped;
+    logic config_write_invalid;
+    integer output_index_ff;
 
     assign commit_value = {hwif_out.FRAME_COMMIT.bank.value, hwif_out.FRAME_COMMIT.word_count.value};
     assign write_bank_value = active_bank_reg ^ 32'h0000_0001;
@@ -133,16 +129,23 @@ module pl_frame_control #(
     assign committed_words = committed_words_reg;
     assign frame_sequence = frame_sequence_reg;
     assign active_output_count_clamped = hwif_out.ACTIVE_OUTPUT_COUNT.value.value > OUTPUT_COUNT;
-    assign strand_length_clamped[0] = hwif_out.STRAND0_PIXEL_COUNT.value.value > PIXELS_PER_OUTPUT;
-    assign strand_length_clamped[1] = hwif_out.STRAND1_PIXEL_COUNT.value.value > PIXELS_PER_OUTPUT;
-    assign strand_length_clamped[2] = hwif_out.STRAND2_PIXEL_COUNT.value.value > PIXELS_PER_OUTPUT;
-    assign strand_length_clamped[3] = hwif_out.STRAND3_PIXEL_COUNT.value.value > PIXELS_PER_OUTPUT;
-    assign config_write_invalid =
-        (active_output_count_swmod_q && active_output_count_clamped)
-        || (strand0_pixel_count_swmod_q && strand_length_clamped[0])
-        || (strand1_pixel_count_swmod_q && strand_length_clamped[1])
-        || (strand2_pixel_count_swmod_q && strand_length_clamped[2])
-        || (strand3_pixel_count_swmod_q && strand_length_clamped[3]);
+
+    always_comb begin
+        integer output_index;
+        strand_length_clamped = {OUTPUT_COUNT{1'b0}};
+        for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
+            strand_length_clamped[output_index] = hwif_out.STRAND_PIXEL_COUNT[output_index].value.value > PIXELS_PER_OUTPUT;
+        end
+    end
+
+    always_comb begin
+        integer output_index;
+        config_write_invalid = active_output_count_swmod_q && active_output_count_clamped;
+        for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
+            config_write_invalid = config_write_invalid
+                || (strand_pixel_count_swmod_q[output_index] && strand_length_clamped[output_index]);
+        end
+    end
 
     assign hwif_in.STATUS.ready.next = status_reg[0];
     assign hwif_in.STATUS.overflow.next = status_reg[1];
@@ -174,7 +177,19 @@ module pl_frame_control #(
     assign hwif_in.FRAME_REJECTED.value.next = frame_rejected_reg;
     assign hwif_in.CONFIG_STATUS.config_invalid.next = config_invalid_sticky_reg;
     assign hwif_in.CONFIG_STATUS.active_count_clamped.next = active_output_count_clamped;
-    assign hwif_in.CONFIG_STATUS.strand_length_clamped.next = strand_length_clamped;
+    always_comb begin
+        integer mask_word_index;
+        integer output_index;
+        for (mask_word_index = 0; mask_word_index < MASK_WORD_COUNT; mask_word_index = mask_word_index + 1) begin
+            hwif_in.STRAND_LENGTH_CLAMPED[mask_word_index].value.next = 32'h0000_0000;
+            for (output_index = 0; output_index < 32; output_index = output_index + 1) begin
+                if ((mask_word_index * 32 + output_index) < OUTPUT_COUNT) begin
+                    hwif_in.STRAND_LENGTH_CLAMPED[mask_word_index].value.next[output_index] =
+                        strand_length_clamped[mask_word_index * 32 + output_index];
+                end
+            end
+        end
+    end
 
     pl_control_regs regs (
         .clk(aclk),
@@ -226,36 +241,28 @@ module pl_frame_control #(
             last_frame_word_swmod_q <= 1'b0;
             frame_drop_notify_swmod_q <= 1'b0;
             active_output_count_swmod_q <= 1'b0;
-            strand0_pixel_count_swmod_q <= 1'b0;
-            strand1_pixel_count_swmod_q <= 1'b0;
-            strand2_pixel_count_swmod_q <= 1'b0;
-            strand3_pixel_count_swmod_q <= 1'b0;
             consumer_reset_pulse <= 1'b0;
-            runtime_active_output_count <= ACTIVE_OUTPUT_WIDTH'(OUTPUT_COUNT);
-            runtime_strand0_pixel_count <= PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT);
-            runtime_strand1_pixel_count <= PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT);
-            runtime_strand2_pixel_count <= PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT);
-            runtime_strand3_pixel_count <= PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT);
-            runtime_output_invert_mask <= {OUTPUT_COUNT{1'b0}};
+            runtime_active_output_count <= ACTIVE_OUTPUT_WIDTH'(pl_config_pkg::DEFAULT_ACTIVE_OUTPUT_COUNT);
+            runtime_output_invert_mask <= pl_config_pkg::DEFAULT_OUTPUT_INVERT_MASK[OUTPUT_COUNT-1:0];
+            for (output_index_ff = 0; output_index_ff < OUTPUT_COUNT; output_index_ff = output_index_ff + 1) begin
+                strand_pixel_count_swmod_q[output_index_ff] <= 1'b0;
+                runtime_strand_pixel_count[output_index_ff*PIXEL_COUNT_WIDTH +: PIXEL_COUNT_WIDTH] <= PIXEL_COUNT_WIDTH'(pl_config_pkg::DEFAULT_STRAND_PIXEL_COUNT);
+            end
         end else begin
             counter_reg <= counter_reg + 32'd1;
             consumer_reset_pulse <= 1'b0;
             runtime_active_output_count <= active_output_count_clamped
                 ? ACTIVE_OUTPUT_WIDTH'(OUTPUT_COUNT)
                 : hwif_out.ACTIVE_OUTPUT_COUNT.value.value[ACTIVE_OUTPUT_WIDTH-1:0];
-            runtime_strand0_pixel_count <= strand_length_clamped[0]
-                ? PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT)
-                : hwif_out.STRAND0_PIXEL_COUNT.value.value[PIXEL_COUNT_WIDTH-1:0];
-            runtime_strand1_pixel_count <= strand_length_clamped[1]
-                ? PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT)
-                : hwif_out.STRAND1_PIXEL_COUNT.value.value[PIXEL_COUNT_WIDTH-1:0];
-            runtime_strand2_pixel_count <= strand_length_clamped[2]
-                ? PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT)
-                : hwif_out.STRAND2_PIXEL_COUNT.value.value[PIXEL_COUNT_WIDTH-1:0];
-            runtime_strand3_pixel_count <= strand_length_clamped[3]
-                ? PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT)
-                : hwif_out.STRAND3_PIXEL_COUNT.value.value[PIXEL_COUNT_WIDTH-1:0];
-            runtime_output_invert_mask <= hwif_out.OUTPUT_INVERT_MASK.value.value[OUTPUT_COUNT-1:0];
+            for (output_index_ff = 0; output_index_ff < OUTPUT_COUNT; output_index_ff = output_index_ff + 1) begin
+                runtime_strand_pixel_count[output_index_ff*PIXEL_COUNT_WIDTH +: PIXEL_COUNT_WIDTH] <= strand_length_clamped[output_index_ff]
+                    ? PIXEL_COUNT_WIDTH'(PIXELS_PER_OUTPUT)
+                    : hwif_out.STRAND_PIXEL_COUNT[output_index_ff].value.value[PIXEL_COUNT_WIDTH-1:0];
+            end
+            for (output_index_ff = 0; output_index_ff < OUTPUT_COUNT; output_index_ff = output_index_ff + 1) begin
+                runtime_output_invert_mask[output_index_ff] <=
+                    hwif_out.OUTPUT_INVERT_MASK[output_index_ff / 32].value.value[output_index_ff % 32];
+            end
 
             frame_commit_swmod_q <= hwif_out.FRAME_COMMIT.word_count.swmod || hwif_out.FRAME_COMMIT.bank.swmod;
             control_clear_swmod_q <= hwif_out.CONTROL.clear_errors.swmod;
@@ -264,10 +271,9 @@ module pl_frame_control #(
             last_frame_word_swmod_q <= hwif_out.LAST_FRAME_WORD.value.swmod;
             frame_drop_notify_swmod_q <= hwif_out.FRAME_DROP_NOTIFY.value.swmod;
             active_output_count_swmod_q <= hwif_out.ACTIVE_OUTPUT_COUNT.value.swmod;
-            strand0_pixel_count_swmod_q <= hwif_out.STRAND0_PIXEL_COUNT.value.swmod;
-            strand1_pixel_count_swmod_q <= hwif_out.STRAND1_PIXEL_COUNT.value.swmod;
-            strand2_pixel_count_swmod_q <= hwif_out.STRAND2_PIXEL_COUNT.value.swmod;
-            strand3_pixel_count_swmod_q <= hwif_out.STRAND3_PIXEL_COUNT.value.swmod;
+            for (output_index_ff = 0; output_index_ff < OUTPUT_COUNT; output_index_ff = output_index_ff + 1) begin
+                strand_pixel_count_swmod_q[output_index_ff] <= hwif_out.STRAND_PIXEL_COUNT[output_index_ff].value.swmod;
+            end
 
             if (first_frame_word_swmod_q) begin
                 staged_first_frame_word_reg <= hwif_out.FIRST_FRAME_WORD.value.value;

@@ -18,7 +18,8 @@ BOOT_BIN := build/sd/BOOT.BIN
 RTL_CHECK_DIR := build/rtl-check
 RTL_SIM_DIR := build/rtl-sim
 SIDE_EFFECT_DIR := build/tool-side-effects
-PS_HOST_TEST_EXE := build/ps-host-test/e131_host_tests.exe
+PS_HOST_E131_TEST_EXE := build/ps-host-test/e131_host_tests.exe
+PS_HOST_FRAME_TEST_EXE := build/ps-host-test/frame_pipeline_host_tests.exe
 
 define collect_root_side_effects
 	$(PYTHON) make_helpers.py collect-root-side-effects $(SIDE_EFFECT_DIR)
@@ -55,31 +56,36 @@ regs-check:
 
 rtl-check: regs-check
 	$(PYTHON) make_helpers.py mkdir $(RTL_CHECK_DIR)
-	cd $(RTL_CHECK_DIR) && $(XVLOG) -sv ../../hw/rtl/generated/pl_control_regs_pkg.sv ../../hw/rtl/generated/pl_control_regs.sv ../../hw/rtl/pl_frame_control.sv ../../hw/rtl/ws281x_frame_consumer.sv ../../hw/rtl/ws281x_controller_core.v ../../hw/rtl/axil_frame_ram.v
+	cd $(RTL_CHECK_DIR) && $(XVLOG) -sv ../../hw/rtl/generated/pl_config_pkg.sv ../../hw/rtl/generated/pl_control_regs_pkg.sv ../../hw/rtl/generated/pl_control_regs.sv ../../hw/rtl/pl_frame_control.sv ../../hw/rtl/ws281x_frame_consumer.sv ../../hw/rtl/ws281x_controller_core.v ../../hw/rtl/axil_frame_ram.v
 	$(collect_root_side_effects)
 
 rtl-sim: regs-check
 	$(PYTHON) make_helpers.py mkdir $(RTL_SIM_DIR)
-	cd $(RTL_SIM_DIR) && $(XVLOG) -sv ../../hw/rtl/generated/pl_control_regs_pkg.sv ../../hw/rtl/generated/pl_control_regs.sv ../../hw/rtl/pl_frame_control.sv ../../hw/rtl/ws281x_frame_consumer.sv ../../hw/rtl/ws281x_controller_core.v ../../hw/rtl/axil_frame_ram.v ../../hw/sim/tb_ws281x_consumer.v
+	cd $(RTL_SIM_DIR) && $(XVLOG) -sv ../../hw/rtl/generated/pl_config_pkg.sv ../../hw/rtl/generated/pl_control_regs_pkg.sv ../../hw/rtl/generated/pl_control_regs.sv ../../hw/rtl/pl_frame_control.sv ../../hw/rtl/ws281x_frame_consumer.sv ../../hw/rtl/ws281x_controller_core.v ../../hw/rtl/axil_frame_ram.v ../../hw/sim/tb_ws281x_consumer.v
 	cd $(RTL_SIM_DIR) && $(XELAB) tb_ws281x_consumer -s tb_ws281x_consumer_sim
 	cd $(RTL_SIM_DIR) && $(XSIM) tb_ws281x_consumer_sim -runall
 	$(collect_root_side_effects)
 
 hw: $(XSA) $(BITSTREAM)
 
-$(XSA) $(BITSTREAM): hw/rtl/generated/pl_control_regs_pkg.sv hw/rtl/generated/pl_control_regs.sv hw/rtl/pl_frame_control.sv hw/rtl/ws281x_frame_consumer.sv hw/rtl/ws281x_controller_core.v hw/rtl/axil_frame_ram.v hw/constraints/pynq_z2.xdc hw/scripts/build.tcl hw/scripts/ps_bd.tcl | regs-check
+$(XSA) $(BITSTREAM): hw/rtl/generated/pl_config_pkg.sv hw/rtl/generated/pl_control_regs_pkg.sv hw/rtl/generated/pl_control_regs.sv hw/rtl/pl_frame_control.sv hw/rtl/ws281x_frame_consumer.sv hw/rtl/ws281x_controller_core.v hw/rtl/axil_frame_ram.v hw/constraints/pynq_z2.xdc hw/scripts/build.tcl hw/scripts/ps_bd.tcl | regs-check
 	$(PYTHON) make_helpers.py mkdir build/vivado
 	cd build/vivado && $(VIVADO) -mode batch -source ../../hw/scripts/build.tcl
 	$(collect_root_side_effects)
 
 ps: $(PS_STAMP)
 
-ps-host-test: $(PS_HOST_TEST_EXE)
-	$(PS_HOST_TEST_EXE)
+ps-host-test: $(PS_HOST_E131_TEST_EXE) $(PS_HOST_FRAME_TEST_EXE)
+	$(PS_HOST_E131_TEST_EXE)
+	$(PS_HOST_FRAME_TEST_EXE)
 
-$(PS_HOST_TEST_EXE): ps/tests/e131_host_tests.c ps/app/e131_parser.c ps/app/e131_parser.h ps/app/e131_receiver.c ps/app/e131_receiver.h ps/app/app_config.c ps/app/app_config.h ps/app/frame_pipeline.h Makefile
+$(PS_HOST_E131_TEST_EXE): ps/tests/e131_host_tests.c ps/app/e131_parser.c ps/app/e131_parser.h ps/app/e131_receiver.c ps/app/e131_receiver.h ps/app/app_config.c ps/app/app_config.h ps/app/generated/pl_config.h ps/app/frame_pipeline.h Makefile
 	$(PYTHON) make_helpers.py mkdir build/ps-host-test
-	$(HOST_CC) -std=c99 -Wall -Wextra -Werror -Ips/app -o $(PS_HOST_TEST_EXE) ps/tests/e131_host_tests.c ps/app/e131_parser.c ps/app/e131_receiver.c ps/app/app_config.c
+	$(HOST_CC) -std=c99 -Wall -Wextra -Werror -Ips/app -o $(PS_HOST_E131_TEST_EXE) ps/tests/e131_host_tests.c ps/app/e131_parser.c ps/app/e131_receiver.c ps/app/app_config.c
+
+$(PS_HOST_FRAME_TEST_EXE): ps/tests/frame_pipeline_host_tests.c ps/app/frame_pipeline.c ps/app/frame_pipeline.h ps/app/pl_ingest.h ps/app/app_config.h ps/app/generated/pl_config.h Makefile
+	$(PYTHON) make_helpers.py mkdir build/ps-host-test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Ips/app -o $(PS_HOST_FRAME_TEST_EXE) ps/tests/frame_pipeline_host_tests.c ps/app/frame_pipeline.c
 
 $(PS_STAMP): $(XSA) $(BITSTREAM) $(wildcard ps/app/*.c) $(wildcard ps/app/*.h) ps/scripts/create_app_vitis.py Makefile | regs-check
 	$(PYTHON) make_helpers.py mkdir build/vitis

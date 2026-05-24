@@ -78,7 +78,7 @@ hw/rtl/axil_frame_ram.v      AXI-Lite frame RAM with a second PL read port
 hw/sim/tb_ws281x_consumer.v  Focused WS281x consumer RTL simulation
 hw/scripts/build.tcl         Vivado batch hardware build
 hw/scripts/ps_bd.tcl         Zynq PS + control/frame-RAM block design
-hw/constraints/pynq_z2.xdc   PYNQ-Z2 PMOD output constraints
+hw/constraints/pynq_z2.xdc   PYNQ-Z2 Arduino/PMOD output constraints
 ps/app/                      Bare-metal controller app
 ps/scripts/create_app_vitis.py
 ps/scripts/package_boot.py
@@ -92,11 +92,11 @@ Makefile
 | Region | Base | Size | Purpose |
 | --- | --- | --- | --- |
 | Control | `0x43C00000` | 4 KiB | Identity, status, counters, commit |
-| Frame RAM | `0x43C10000` | 32 KiB | 8192 32-bit frame words |
+| Frame RAM | `0x43C80000` | 256 KiB | 61440 32-bit frame words |
 
 The control register map is authored in `hw/regs/pl_control.rdl`. Run `make regs` to regenerate the committed PS header and RTL register block, plus local HTML docs under `build/docs/regs/pl_control/index.html`. Run `make regs-check` to fail if committed generated artifacts are stale.
 
-Current frame format is output-major: each bank stores output 0 pixels first, then output 1, output 2, and output 3. Word `0` is output 0 pixel 0, word `1023` is output 0 pixel 1023, word `1024` is output 1 pixel 0, and so on. Each word is `0x00RRGGBB`. The frame RAM capacity is `8192` words split into two `4096` word banks, matching the current configured frame size of `4 * 1024` pixels.
+Current frame format is fixed output-major storage for 30 synthesized outputs with 1024 pixels per output. Word `0` is output 0 pixel 0, word `1023` is output 0 pixel 1023, word `1024` is output 1 pixel 0, and so on through output 29. Each word is `0x00RRGGBB`. The frame RAM capacity is `61440` words split into two `30720` word banks. Runtime configuration selects the active output count and per-output lengths within those maxima; boot defaults are 30 active outputs, 50 pixels each, and output invert mask `0x3fffffff`.
 
 ## Ethernet E1.31 Bring-Up
 
@@ -131,4 +131,4 @@ python ps/tools/e131_send.py --dest-ip 192.168.7.2 --pattern bars --packet-count
 
 The sender is send-only. UART remains the canonical observer. A successful packet test shows increasing `rx_packets`, `e131_valid`, and `frames_committed`. Malformed packets or packets outside the configured universe range increment `e131_rejected` and do not commit a frame.
 
-E1.31 universe data is accepted starting at `DAWN_FIRST_UNIVERSE`. RGB slots are interpreted as the same linear output-major stream used by PL frame RAM: output 0 pixels first, then output 1, output 2, and output 3. The PS writes those slots directly into the inactive frame bank before committing through `frame_pipeline_commit()`.
+E1.31 universe data is accepted starting at `DAWN_FIRST_UNIVERSE`. RGB slots are interpreted as the same linear output-major stream used by PL frame RAM: output 0 pixels first, then output 1, and onward through the configured active output count. The PS writes those slots directly into the inactive frame bank before committing through `frame_pipeline_commit()`.

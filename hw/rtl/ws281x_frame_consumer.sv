@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 
 module ws281x_frame_consumer #(
-    parameter FRAME_WORDS = 8192,
-    parameter FRAME_ADDR_WIDTH = 15,
-    parameter OUTPUT_COUNT = 4,
-    parameter PIXELS_PER_OUTPUT = 1024,
+    parameter FRAME_WORDS = pl_config_pkg::FRAME_WORDS,
+    parameter FRAME_ADDR_WIDTH = pl_config_pkg::FRAME_ADDR_WIDTH,
+    parameter OUTPUT_COUNT = pl_config_pkg::OUTPUT_COUNT,
+    parameter PIXELS_PER_OUTPUT = pl_config_pkg::PIXELS_PER_OUTPUT,
     parameter CLK_HZ = 100000000,
-    parameter WS281X_BIT_RATE = 800000
+    parameter WS281X_BIT_RATE = pl_config_pkg::WS281X_BIT_RATE
 ) (
     input  wire                       aclk,
     input  wire                       aresetn,
@@ -17,10 +17,7 @@ module ws281x_frame_consumer #(
     input  wire [31:0]                committed_words,
     input  wire [31:0]                frame_sequence,
     input  wire [$clog2(OUTPUT_COUNT+1)-1:0] runtime_active_output_count,
-    input  wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand0_pixel_count,
-    input  wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand1_pixel_count,
-    input  wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand2_pixel_count,
-    input  wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand3_pixel_count,
+    input  wire [(OUTPUT_COUNT*$clog2(PIXELS_PER_OUTPUT+1))-1:0] runtime_strand_pixel_count,
     input  wire [OUTPUT_COUNT-1:0]    runtime_output_invert_mask,
 
     output wire                       busy,
@@ -61,12 +58,14 @@ module ws281x_frame_consumer #(
     localparam [2:0] TX_VALIDATE = 3'd5;
     localparam [2:0] TX_COMPUTE_CONFIG = 3'd6;
 
-    localparam [1:0] RD_IDLE = 2'd0;
-    localparam [1:0] RD_ADDR = 2'd1;
-    localparam [1:0] RD_DATA = 2'd2;
+    localparam [2:0] RD_IDLE = 3'd0;
+    localparam [2:0] RD_SCAN = 3'd1;
+    localparam [2:0] RD_ADDR_PREP = 3'd2;
+    localparam [2:0] RD_ADDR = 3'd3;
+    localparam [2:0] RD_DATA = 3'd4;
 
     logic [2:0] tx_state_reg;
-    logic [1:0] rd_state_reg;
+    logic [2:0] rd_state_reg;
     logic [31:0] tx_sequence_reg;
     logic [31:0] tx_active_bank_reg;
     logic [PIXEL_COUNT_WIDTH-1:0] pixel_index_reg;
@@ -75,16 +74,25 @@ module ws281x_frame_consumer #(
     logic [4:0] bit_index_reg;
     logic [31:0] reset_cycle_reg;
     logic [ACTIVE_OUTPUT_WIDTH-1:0] read_output_reg;
+    logic [ACTIVE_OUTPUT_WIDTH-1:0] scan_output_reg;
+    logic [31:0] scan_base_word_reg;
+    logic [31:0] frame_bank_base_words_reg;
+    logic [31:0] selected_output_base_word_reg;
     logic [31:0] current_pixel_reg [0:OUTPUT_COUNT-1];
     logic [31:0] next_pixel_reg [0:OUTPUT_COUNT-1];
     logic [ACTIVE_OUTPUT_WIDTH-1:0] frame_active_output_count_reg;
     logic [PIXEL_COUNT_WIDTH-1:0] frame_strand_pixel_count_reg [0:OUTPUT_COUNT-1];
     logic [PIXEL_COUNT_WIDTH-1:0] frame_max_pixels_reg;
     logic [31:0] frame_required_words_reg;
+    logic [31:0] output_frame_base_words_reg [0:OUTPUT_COUNT-1];
     logic [OUTPUT_COUNT-1:0] frame_output_invert_mask_reg;
+    logic [OUTPUT_COUNT-1:0] current_active_mask_reg;
+    logic [OUTPUT_COUNT-1:0] next_active_mask_reg;
     logic next_pixel_valid_reg;
     logic read_active_reg;
     logic [OUTPUT_COUNT-1:0] ws281x_data_reg;
+    logic [ACTIVE_OUTPUT_WIDTH-1:0] config_scan_output_reg;
+    logic [31:0] config_next_base_word_reg;
 
     wire frame_read_address_fire;
     wire frame_read_data_fire;
@@ -112,105 +120,8 @@ module ws281x_frame_consumer #(
         end
     endfunction
 
-    function automatic [FRAME_ADDR_WIDTH-1:0] frame_byte_addr(
-        input [31:0] bank,
-        input [PIXEL_COUNT_WIDTH-1:0] pixel,
-        input [OUTPUT_INDEX_WIDTH-1:0] output_num
-    );
-        logic [31:0] word_index;
-        begin
-            word_index = (bank[0] ? FRAME_WORDS_PER_BANK : 32'h0000_0000) + (output_num * PIXELS_PER_OUTPUT) + pixel;
-            frame_byte_addr = word_index[FRAME_ADDR_WIDTH-3:0] << 2;
-        end
-    endfunction
-
-    function automatic [PIXEL_COUNT_WIDTH-1:0] runtime_strand_pixel_count(input [OUTPUT_INDEX_WIDTH-1:0] output_num);
-        begin
-            case (output_num)
-            OUTPUT_INDEX_WIDTH'(0): runtime_strand_pixel_count = runtime_strand0_pixel_count;
-            OUTPUT_INDEX_WIDTH'(1): runtime_strand_pixel_count = runtime_strand1_pixel_count;
-            OUTPUT_INDEX_WIDTH'(2): runtime_strand_pixel_count = runtime_strand2_pixel_count;
-            OUTPUT_INDEX_WIDTH'(3): runtime_strand_pixel_count = runtime_strand3_pixel_count;
-            default: runtime_strand_pixel_count = {PIXEL_COUNT_WIDTH{1'b0}};
-            endcase
-        end
-    endfunction
-
-    function automatic [PIXEL_COUNT_WIDTH-1:0] latched_max_effective_pixels;
-        integer idx;
-        logic [PIXEL_COUNT_WIDTH-1:0] length;
-        begin
-            latched_max_effective_pixels = {PIXEL_COUNT_WIDTH{1'b0}};
-            for (idx = 0; idx < OUTPUT_COUNT; idx = idx + 1) begin
-                length = frame_strand_pixel_count_reg[idx];
-                if (ACTIVE_OUTPUT_WIDTH'(idx) < frame_active_output_count_reg && length > latched_max_effective_pixels) begin
-                    latched_max_effective_pixels = length;
-                end
-            end
-        end
-    endfunction
-
-    function automatic [31:0] latched_required_frame_words;
-        integer idx;
-        logic [31:0] length;
-        begin
-            latched_required_frame_words = 32'h0000_0000;
-            for (idx = 0; idx < OUTPUT_COUNT; idx = idx + 1) begin
-                length = frame_strand_pixel_count_reg[idx];
-                if (ACTIVE_OUTPUT_WIDTH'(idx) < frame_active_output_count_reg && length != 32'h0000_0000) begin
-                    latched_required_frame_words = (idx * PIXELS_PER_OUTPUT) + length;
-                end
-            end
-        end
-    endfunction
-
-    function automatic [OUTPUT_COUNT-1:0] active_mask_for_pixel(input [PIXEL_COUNT_WIDTH-1:0] pixel);
-        integer idx;
-        begin
-            active_mask_for_pixel = {OUTPUT_COUNT{1'b0}};
-            for (idx = 0; idx < OUTPUT_COUNT; idx = idx + 1) begin
-                active_mask_for_pixel[idx] =
-                    ACTIVE_OUTPUT_WIDTH'(idx) < frame_active_output_count_reg
-                    && pixel < frame_strand_pixel_count_reg[idx];
-            end
-        end
-    endfunction
-
-    function automatic [OUTPUT_COUNT-1:0] read_search_mask(
-        input [PIXEL_COUNT_WIDTH-1:0] pixel,
-        input [ACTIVE_OUTPUT_WIDTH-1:0] start_output
-    );
-        integer idx;
-        begin
-            read_search_mask = active_mask_for_pixel(pixel);
-            for (idx = 0; idx < OUTPUT_COUNT; idx = idx + 1) begin
-                if (ACTIVE_OUTPUT_WIDTH'(idx) < start_output) begin
-                    read_search_mask[idx] = 1'b0;
-                end
-            end
-        end
-    endfunction
-
-    function automatic [ACTIVE_OUTPUT_WIDTH-1:0] first_output_from_mask(input [OUTPUT_COUNT-1:0] mask);
-        begin
-            first_output_from_mask = ACTIVE_OUTPUT_WIDTH'(OUTPUT_COUNT);
-            if (OUTPUT_COUNT > 0 && mask[0]) begin
-                first_output_from_mask = ACTIVE_OUTPUT_WIDTH'(0);
-            end else if (OUTPUT_COUNT > 1 && mask[1]) begin
-                first_output_from_mask = ACTIVE_OUTPUT_WIDTH'(1);
-            end else if (OUTPUT_COUNT > 2 && mask[2]) begin
-                first_output_from_mask = ACTIVE_OUTPUT_WIDTH'(2);
-            end else if (OUTPUT_COUNT > 3 && mask[3]) begin
-                first_output_from_mask = ACTIVE_OUTPUT_WIDTH'(3);
-            end
-        end
-    endfunction
-
     always_ff @(posedge aclk) begin
-        logic [FRAME_ADDR_WIDTH-1:0] next_read_addr;
-        logic [ACTIVE_OUTPUT_WIDTH-1:0] next_output;
-        logic [OUTPUT_COUNT-1:0] next_output_mask;
-        logic [OUTPUT_COUNT-1:0] tx_active_mask;
+        logic [31:0] next_read_word;
 
         if (!aresetn) begin
             tx_state_reg <= TX_IDLE;
@@ -223,10 +134,18 @@ module ws281x_frame_consumer #(
             bit_index_reg <= 5'd0;
             reset_cycle_reg <= 32'h0000_0000;
             read_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+            scan_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+            scan_base_word_reg <= 32'h0000_0000;
+            frame_bank_base_words_reg <= 32'h0000_0000;
+            selected_output_base_word_reg <= 32'h0000_0000;
             frame_active_output_count_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
             frame_max_pixels_reg <= {PIXEL_COUNT_WIDTH{1'b0}};
             frame_required_words_reg <= 32'h0000_0000;
+            config_scan_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+            config_next_base_word_reg <= 32'h0000_0000;
             frame_output_invert_mask_reg <= {OUTPUT_COUNT{1'b0}};
+            current_active_mask_reg <= {OUTPUT_COUNT{1'b0}};
+            next_active_mask_reg <= {OUTPUT_COUNT{1'b0}};
             next_pixel_valid_reg <= 1'b0;
             read_active_reg <= 1'b0;
             ws281x_data_reg <= {OUTPUT_COUNT{1'b0}};
@@ -241,6 +160,7 @@ module ws281x_frame_consumer #(
                 current_pixel_reg[output_index] <= 32'h0000_0000;
                 next_pixel_reg[output_index] <= 32'h0000_0000;
                 frame_strand_pixel_count_reg[output_index] <= {PIXEL_COUNT_WIDTH{1'b0}};
+                output_frame_base_words_reg[output_index] <= 32'h0000_0000;
             end
         end else begin
             error_pulse <= 1'b0;
@@ -260,14 +180,18 @@ module ws281x_frame_consumer #(
                 pixel_index_reg <= {PIXEL_COUNT_WIDTH{1'b0}};
                 read_pixel_index_reg <= {PIXEL_COUNT_WIDTH{1'b0}};
                 read_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+                scan_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+                scan_base_word_reg <= 32'h0000_0000;
+                frame_bank_base_words_reg <= active_bank[0] ? FRAME_WORDS_PER_BANK : 32'h0000_0000;
+                selected_output_base_word_reg <= 32'h0000_0000;
                 frame_active_output_count_reg <= runtime_active_output_count;
-                frame_strand_pixel_count_reg[0] <= runtime_strand0_pixel_count;
-                frame_strand_pixel_count_reg[1] <= runtime_strand1_pixel_count;
-                frame_strand_pixel_count_reg[2] <= runtime_strand2_pixel_count;
-                frame_strand_pixel_count_reg[3] <= runtime_strand3_pixel_count;
                 frame_max_pixels_reg <= {PIXEL_COUNT_WIDTH{1'b0}};
                 frame_required_words_reg <= 32'h0000_0000;
+                config_scan_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+                config_next_base_word_reg <= 32'h0000_0000;
                 frame_output_invert_mask_reg <= runtime_output_invert_mask;
+                current_active_mask_reg <= {OUTPUT_COUNT{1'b0}};
+                next_active_mask_reg <= {OUTPUT_COUNT{1'b0}};
                 next_pixel_valid_reg <= 1'b0;
                 read_active_reg <= 1'b0;
                 m_frame_arvalid <= 1'b0;
@@ -276,13 +200,26 @@ module ws281x_frame_consumer #(
                 for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
                     current_pixel_reg[output_index] <= 32'h0000_0000;
                     next_pixel_reg[output_index] <= 32'h0000_0000;
+                    frame_strand_pixel_count_reg[output_index] <= runtime_strand_pixel_count[output_index*PIXEL_COUNT_WIDTH +: PIXEL_COUNT_WIDTH];
                 end
             end
 
             if (tx_state_reg == TX_COMPUTE_CONFIG) begin
-                frame_max_pixels_reg <= latched_max_effective_pixels();
-                frame_required_words_reg <= latched_required_frame_words();
-                tx_state_reg <= TX_VALIDATE;
+                output_frame_base_words_reg[config_scan_output_reg[OUTPUT_INDEX_WIDTH-1:0]] <= config_next_base_word_reg;
+                config_next_base_word_reg <= config_next_base_word_reg + PIXELS_PER_OUTPUT;
+                if (config_scan_output_reg < frame_active_output_count_reg
+                    && frame_strand_pixel_count_reg[config_scan_output_reg[OUTPUT_INDEX_WIDTH-1:0]] != {PIXEL_COUNT_WIDTH{1'b0}}) begin
+                    if (frame_strand_pixel_count_reg[config_scan_output_reg[OUTPUT_INDEX_WIDTH-1:0]] > frame_max_pixels_reg) begin
+                        frame_max_pixels_reg <= frame_strand_pixel_count_reg[config_scan_output_reg[OUTPUT_INDEX_WIDTH-1:0]];
+                    end
+                    frame_required_words_reg <= config_next_base_word_reg
+                        + frame_strand_pixel_count_reg[config_scan_output_reg[OUTPUT_INDEX_WIDTH-1:0]];
+                end
+                if (config_scan_output_reg == ACTIVE_OUTPUT_WIDTH'(OUTPUT_COUNT - 1)) begin
+                    tx_state_reg <= TX_VALIDATE;
+                end else begin
+                    config_scan_output_reg <= config_scan_output_reg + ACTIVE_OUTPUT_WIDTH'(1);
+                end
             end
 
             if (tx_state_reg == TX_VALIDATE) begin
@@ -306,6 +243,41 @@ module ws281x_frame_consumer #(
                 end
             end
 
+            if (rd_state_reg == RD_SCAN) begin
+                if (scan_output_reg == ACTIVE_OUTPUT_WIDTH'(OUTPUT_COUNT)) begin
+                    rd_state_reg <= RD_IDLE;
+                    if (read_active_reg) begin
+                        read_active_reg <= 1'b0;
+                    end else begin
+                        next_pixel_valid_reg <= 1'b1;
+                    end
+                end else begin
+                    if (scan_output_reg < frame_active_output_count_reg
+                        && read_pixel_index_reg < frame_strand_pixel_count_reg[scan_output_reg[OUTPUT_INDEX_WIDTH-1:0]]) begin
+                        read_output_reg <= scan_output_reg;
+                        selected_output_base_word_reg <= scan_base_word_reg;
+                        if (read_active_reg) begin
+                            current_active_mask_reg[scan_output_reg[OUTPUT_INDEX_WIDTH-1:0]] <= 1'b1;
+                        end else begin
+                            next_active_mask_reg[scan_output_reg[OUTPUT_INDEX_WIDTH-1:0]] <= 1'b1;
+                        end
+                        scan_output_reg <= scan_output_reg + ACTIVE_OUTPUT_WIDTH'(1);
+                        scan_base_word_reg <= scan_base_word_reg + PIXELS_PER_OUTPUT;
+                        rd_state_reg <= RD_ADDR_PREP;
+                    end else begin
+                        scan_output_reg <= scan_output_reg + ACTIVE_OUTPUT_WIDTH'(1);
+                        scan_base_word_reg <= scan_base_word_reg + PIXELS_PER_OUTPUT;
+                    end
+                end
+            end
+
+            if (rd_state_reg == RD_ADDR_PREP) begin
+                next_read_word = frame_bank_base_words_reg + selected_output_base_word_reg + read_pixel_index_reg;
+                m_frame_araddr <= next_read_word[FRAME_ADDR_WIDTH-3:0] << 2;
+                m_frame_arvalid <= 1'b1;
+                rd_state_reg <= RD_ADDR;
+            end
+
             if (frame_read_address_fire) begin
                 m_frame_arvalid <= 1'b0;
                 rd_state_reg <= RD_DATA;
@@ -324,28 +296,7 @@ module ws281x_frame_consumer #(
                         next_pixel_reg[read_output_reg] <= m_frame_rdata;
                     end
 
-                    next_output = first_output_from_mask(read_search_mask(
-                        read_pixel_index_reg,
-                        read_output_reg + ACTIVE_OUTPUT_WIDTH'(1)
-                    ));
-                    if (next_output == ACTIVE_OUTPUT_WIDTH'(OUTPUT_COUNT)) begin
-                        rd_state_reg <= RD_IDLE;
-                        if (read_active_reg) begin
-                            read_active_reg <= 1'b0;
-                        end else begin
-                            next_pixel_valid_reg <= 1'b1;
-                        end
-                    end else begin
-                        read_output_reg <= next_output;
-                        next_read_addr = frame_byte_addr(
-                            tx_active_bank_reg,
-                            read_pixel_index_reg,
-                            next_output[OUTPUT_INDEX_WIDTH-1:0]
-                        );
-                        m_frame_araddr <= next_read_addr;
-                        m_frame_arvalid <= 1'b1;
-                        rd_state_reg <= RD_ADDR;
-                    end
+                    rd_state_reg <= RD_SCAN;
                 end
             end
 
@@ -353,16 +304,11 @@ module ws281x_frame_consumer #(
             TX_LOAD_FIRST: begin
                 ws281x_data_reg <= {OUTPUT_COUNT{1'b0}};
                 if (rd_state_reg == RD_IDLE && read_active_reg && !m_frame_arvalid) begin
-                    next_output_mask = active_mask_for_pixel({PIXEL_COUNT_WIDTH{1'b0}});
-                    next_output = first_output_from_mask(next_output_mask);
-                    read_output_reg <= next_output;
-                    rd_state_reg <= RD_ADDR;
-                    m_frame_araddr <= frame_byte_addr(
-                        tx_active_bank_reg,
-                        {PIXEL_COUNT_WIDTH{1'b0}},
-                        next_output[OUTPUT_INDEX_WIDTH-1:0]
-                    );
-                    m_frame_arvalid <= 1'b1;
+                    read_pixel_index_reg <= {PIXEL_COUNT_WIDTH{1'b0}};
+                    scan_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+                    scan_base_word_reg <= 32'h0000_0000;
+                    current_active_mask_reg <= {OUTPUT_COUNT{1'b0}};
+                    rd_state_reg <= RD_SCAN;
                 end else if (rd_state_reg == RD_IDLE && !read_active_reg) begin
                     pixel_index_reg <= {PIXEL_COUNT_WIDTH{1'b0}};
                     bit_index_reg <= 5'd0;
@@ -370,30 +316,20 @@ module ws281x_frame_consumer #(
                     tx_state_reg <= TX_SEND;
                     if (frame_max_pixels_reg > PIXEL_COUNT_WIDTH'(1)) begin
                         read_pixel_index_reg <= PIXEL_COUNT_WIDTH'(1);
-                        next_output = first_output_from_mask(read_search_mask(
-                            PIXEL_COUNT_WIDTH'(1),
-                            {ACTIVE_OUTPUT_WIDTH{1'b0}}
-                        ));
-                        read_output_reg <= next_output;
                         next_pixel_valid_reg <= 1'b0;
+                        next_active_mask_reg <= {OUTPUT_COUNT{1'b0}};
+                        scan_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+                        scan_base_word_reg <= 32'h0000_0000;
                         for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
                             next_pixel_reg[output_index] <= 32'h0000_0000;
                         end
-                        next_read_addr = frame_byte_addr(
-                            tx_active_bank_reg,
-                            PIXEL_COUNT_WIDTH'(1),
-                            next_output[OUTPUT_INDEX_WIDTH-1:0]
-                        );
-                        m_frame_araddr <= next_read_addr;
-                        m_frame_arvalid <= 1'b1;
-                        rd_state_reg <= RD_ADDR;
+                        rd_state_reg <= RD_SCAN;
                     end
                 end
             end
             TX_SEND: begin
-                tx_active_mask = active_mask_for_pixel(pixel_index_reg);
                 for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
-                    ws281x_data_reg[output_index] <= tx_active_mask[output_index]
+                    ws281x_data_reg[output_index] <= current_active_mask_reg[output_index]
                         && bit_cycle_reg < (ws_bit_value(current_pixel_reg[output_index], bit_index_reg) ? WS_T1H_CYCLES : WS_T0H_CYCLES);
                 end
 
@@ -409,26 +345,18 @@ module ws281x_frame_consumer #(
                             for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
                                 current_pixel_reg[output_index] <= next_pixel_reg[output_index];
                             end
+                            current_active_mask_reg <= next_active_mask_reg;
                             pixel_index_reg <= pixel_index_reg + PIXEL_COUNT_WIDTH'(1);
                             next_pixel_valid_reg <= 1'b0;
                             if (pixel_index_reg + PIXEL_COUNT_WIDTH'(2) < frame_max_pixels_reg) begin
                                 read_pixel_index_reg <= pixel_index_reg + PIXEL_COUNT_WIDTH'(2);
-                                next_output = first_output_from_mask(read_search_mask(
-                                    pixel_index_reg + PIXEL_COUNT_WIDTH'(2),
-                                    {ACTIVE_OUTPUT_WIDTH{1'b0}}
-                                ));
-                                read_output_reg <= next_output;
+                                next_active_mask_reg <= {OUTPUT_COUNT{1'b0}};
+                                scan_output_reg <= {ACTIVE_OUTPUT_WIDTH{1'b0}};
+                                scan_base_word_reg <= 32'h0000_0000;
                                 for (output_index = 0; output_index < OUTPUT_COUNT; output_index = output_index + 1) begin
                                     next_pixel_reg[output_index] <= 32'h0000_0000;
                                 end
-                                next_read_addr = frame_byte_addr(
-                                    tx_active_bank_reg,
-                                    pixel_index_reg + PIXEL_COUNT_WIDTH'(2),
-                                    next_output[OUTPUT_INDEX_WIDTH-1:0]
-                                );
-                                m_frame_araddr <= next_read_addr;
-                                m_frame_arvalid <= 1'b1;
-                                rd_state_reg <= RD_ADDR;
+                                rd_state_reg <= RD_SCAN;
                             end
                         end else begin
                             tx_state_reg <= TX_ERROR;

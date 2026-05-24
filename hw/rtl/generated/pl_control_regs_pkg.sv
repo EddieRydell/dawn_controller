@@ -6,7 +6,7 @@ package pl_control_regs_pkg;
 
     localparam PL_CONTROL_REGS_DATA_WIDTH = 32;
     localparam PL_CONTROL_REGS_MIN_ADDR_WIDTH = 12;
-    localparam PL_CONTROL_REGS_SIZE = 'h9c;
+    localparam PL_CONTROL_REGS_SIZE = 'h108;
 
     typedef struct {
         logic next;
@@ -223,14 +223,17 @@ package pl_control_regs_pkg;
     } pl_control__CONFIG_STATUS__active_count_clamped__in_t;
 
     typedef struct {
-        logic [3:0] next;
-    } pl_control__CONFIG_STATUS__strand_length_clamped__in_t;
-
-    typedef struct {
         pl_control__CONFIG_STATUS__config_invalid__in_t config_invalid;
         pl_control__CONFIG_STATUS__active_count_clamped__in_t active_count_clamped;
-        pl_control__CONFIG_STATUS__strand_length_clamped__in_t strand_length_clamped;
     } pl_control__CONFIG_STATUS__in_t;
+
+    typedef struct {
+        logic [31:0] next;
+    } pl_control__STRAND_LENGTH_CLAMPED__value__in_t;
+
+    typedef struct {
+        pl_control__STRAND_LENGTH_CLAMPED__value__in_t value;
+    } pl_control__STRAND_LENGTH_CLAMPED__in_t;
 
     typedef struct {
         pl_control__STATUS__in_t STATUS;
@@ -256,6 +259,7 @@ package pl_control_regs_pkg;
         pl_control__FRAME_DROPPED__in_t FRAME_DROPPED;
         pl_control__FRAME_REJECTED__in_t FRAME_REJECTED;
         pl_control__CONFIG_STATUS__in_t CONFIG_STATUS;
+        pl_control__STRAND_LENGTH_CLAMPED__in_t STRAND_LENGTH_CLAMPED[1];
     } pl_control__in_t;
 
     typedef struct {
@@ -349,41 +353,14 @@ package pl_control_regs_pkg;
     typedef struct {
         logic [31:0] value;
         logic swmod;
-    } pl_control__STRAND0_PIXEL_COUNT__value__out_t;
+    } pl_control__STRAND_PIXEL_COUNT__value__out_t;
 
     typedef struct {
-        pl_control__STRAND0_PIXEL_COUNT__value__out_t value;
-    } pl_control__STRAND0_PIXEL_COUNT__out_t;
-
-    typedef struct {
-        logic [31:0] value;
-        logic swmod;
-    } pl_control__STRAND1_PIXEL_COUNT__value__out_t;
-
-    typedef struct {
-        pl_control__STRAND1_PIXEL_COUNT__value__out_t value;
-    } pl_control__STRAND1_PIXEL_COUNT__out_t;
+        pl_control__STRAND_PIXEL_COUNT__value__out_t value;
+    } pl_control__STRAND_PIXEL_COUNT__out_t;
 
     typedef struct {
         logic [31:0] value;
-        logic swmod;
-    } pl_control__STRAND2_PIXEL_COUNT__value__out_t;
-
-    typedef struct {
-        pl_control__STRAND2_PIXEL_COUNT__value__out_t value;
-    } pl_control__STRAND2_PIXEL_COUNT__out_t;
-
-    typedef struct {
-        logic [31:0] value;
-        logic swmod;
-    } pl_control__STRAND3_PIXEL_COUNT__value__out_t;
-
-    typedef struct {
-        pl_control__STRAND3_PIXEL_COUNT__value__out_t value;
-    } pl_control__STRAND3_PIXEL_COUNT__out_t;
-
-    typedef struct {
-        logic [3:0] value;
     } pl_control__OUTPUT_INVERT_MASK__value__out_t;
 
     typedef struct {
@@ -399,10 +376,7 @@ package pl_control_regs_pkg;
         pl_control__CONSUMER_CONTROL__out_t CONSUMER_CONTROL;
         pl_control__FRAME_DROP_NOTIFY__out_t FRAME_DROP_NOTIFY;
         pl_control__ACTIVE_OUTPUT_COUNT__out_t ACTIVE_OUTPUT_COUNT;
-        pl_control__STRAND0_PIXEL_COUNT__out_t STRAND0_PIXEL_COUNT;
-        pl_control__STRAND1_PIXEL_COUNT__out_t STRAND1_PIXEL_COUNT;
-        pl_control__STRAND2_PIXEL_COUNT__out_t STRAND2_PIXEL_COUNT;
-        pl_control__STRAND3_PIXEL_COUNT__out_t STRAND3_PIXEL_COUNT;
-        pl_control__OUTPUT_INVERT_MASK__out_t OUTPUT_INVERT_MASK;
+        pl_control__STRAND_PIXEL_COUNT__out_t STRAND_PIXEL_COUNT[30];
+        pl_control__OUTPUT_INVERT_MASK__out_t OUTPUT_INVERT_MASK[1];
     } pl_control__out_t;
 endpackage

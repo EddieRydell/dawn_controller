@@ -2,12 +2,12 @@
 
 module tb_ws281x_consumer;
     localparam AXIL_ADDR_WIDTH = 12;
-    localparam FRAME_ADDR_WIDTH = 6;
-    localparam OUTPUT_COUNT = 4;
+    localparam FRAME_ADDR_WIDTH = 10;
+    localparam OUTPUT_COUNT = 30;
     localparam PIXELS_PER_OUTPUT = 2;
-    localparam FRAME_WORDS = 16;
+    localparam FRAME_WORDS = 160;
     localparam [31:0] PL_CONTROL_ID_VALUE = 32'h4546_504c;
-    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0007_0000;
+    localparam [31:0] PL_CONTROL_VERSION_VALUE = 32'h0008_0000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ID_OFFSET = 12'h000;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_VERSION_OFFSET = 12'h004;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONTROL_OFFSET = 12'h008;
@@ -32,12 +32,10 @@ module tb_ws281x_consumer;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_REJECTED_OFFSET = 12'h078;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_FRAME_DROP_NOTIFY_OFFSET = 12'h07c;
     localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET = 12'h080;
-    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET = 12'h084;
-    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND1_PIXEL_COUNT_OFFSET = 12'h088;
-    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND2_PIXEL_COUNT_OFFSET = 12'h08c;
-    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND3_PIXEL_COUNT_OFFSET = 12'h090;
-    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONFIG_STATUS_OFFSET = 12'h094;
-    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_OUTPUT_INVERT_MASK_OFFSET = 12'h098;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET = 12'h084;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_CONFIG_STATUS_OFFSET = 12'h0fc;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_STRAND_LENGTH_CLAMPED_OFFSET = 12'h100;
+    localparam [AXIL_ADDR_WIDTH-1:0] PL_CONTROL_OUTPUT_INVERT_MASK_OFFSET = 12'h104;
     localparam [31:0] PL_CONTROL_STATUS_READY = 32'h0000_0001;
     localparam [31:0] PL_CONTROL_STATUS_OVERFLOW = 32'h0000_0002;
     localparam [31:0] PL_CONTROL_STATUS_COMMIT_REJECTED = 32'h0000_0008;
@@ -102,12 +100,17 @@ module tb_ws281x_consumer;
     integer word_addr;
     integer frame_read_word;
     integer frame_read_in_bank_word;
+    integer frame_read_output;
+    integer frame_read_pixel;
     reg [31:0] write_bank;
     reg [31:0] second_write_bank;
     reg [31:0] bank_words;
     reg [31:0] read_data;
     reg monitor_runtime_config_reads = 1'b0;
     reg monitor_no_frame_reads = 1'b0;
+    reg monitor_expected_reads = 1'b0;
+    reg [OUTPUT_COUNT-1:0] expected_read_mask [0:PIXELS_PER_OUTPUT-1];
+    reg [OUTPUT_COUNT-1:0] seen_read_mask [0:PIXELS_PER_OUTPUT-1];
 
     always #5 aclk = ~aclk;
 
@@ -118,11 +121,19 @@ module tb_ws281x_consumer;
             end
             frame_read_word = frame_araddr >> 2;
             frame_read_in_bank_word = frame_read_word % bank_words;
-            if (frame_read_in_bank_word != 0
-                && frame_read_in_bank_word != 2
-                && frame_read_in_bank_word != 3
-                && frame_read_in_bank_word != 4) begin
+            if ((frame_read_in_bank_word % 2) != 0 && frame_read_in_bank_word != 3) begin
                 $fatal(1, "consumer read inactive runtime-config word %0d", frame_read_in_bank_word);
+            end
+            if (monitor_expected_reads) begin
+                frame_read_output = frame_read_in_bank_word / PIXELS_PER_OUTPUT;
+                frame_read_pixel = frame_read_in_bank_word % PIXELS_PER_OUTPUT;
+                if (frame_read_output >= OUTPUT_COUNT
+                    || frame_read_pixel >= PIXELS_PER_OUTPUT
+                    || !expected_read_mask[frame_read_pixel][frame_read_output]) begin
+                    $fatal(1, "consumer unexpected frame read word %0d output %0d pixel %0d",
+                        frame_read_in_bank_word, frame_read_output, frame_read_pixel);
+                end
+                seen_read_mask[frame_read_pixel][frame_read_output] <= 1'b1;
             end
         end
     end
@@ -168,7 +179,8 @@ module tb_ws281x_consumer;
     );
 
     axil_frame_ram #(
-        .AXIL_ADDR_WIDTH(FRAME_ADDR_WIDTH)
+        .AXIL_ADDR_WIDTH(FRAME_ADDR_WIDTH),
+        .FRAME_WORDS(FRAME_WORDS)
     ) frame_ram (
         .aclk(aclk),
         .aresetn(aresetn),
@@ -252,6 +264,42 @@ module tb_ws281x_consumer;
         end
     endtask
 
+    task clear_expected_reads;
+        integer pixel;
+        begin
+            for (pixel = 0; pixel < PIXELS_PER_OUTPUT; pixel = pixel + 1) begin
+                expected_read_mask[pixel] = {OUTPUT_COUNT{1'b0}};
+                seen_read_mask[pixel] = {OUTPUT_COUNT{1'b0}};
+            end
+            monitor_expected_reads = 1'b1;
+        end
+    endtask
+
+    task expect_output_length;
+        input integer output_num;
+        input integer pixel_count;
+        integer pixel;
+        begin
+            for (pixel = 0; pixel < pixel_count; pixel = pixel + 1) begin
+                expected_read_mask[pixel][output_num] = 1'b1;
+            end
+        end
+    endtask
+
+    task check_expected_reads;
+        input [8*64-1:0] scenario;
+        integer pixel;
+        begin
+            for (pixel = 0; pixel < PIXELS_PER_OUTPUT; pixel = pixel + 1) begin
+                if (seen_read_mask[pixel] != expected_read_mask[pixel]) begin
+                    $fatal(1, "%0s read mask mismatch for pixel %0d: seen %08x expected %08x",
+                        scenario, pixel, seen_read_mask[pixel], expected_read_mask[pixel]);
+                end
+            end
+            monitor_expected_reads = 1'b0;
+        end
+    endtask
+
     initial begin
         repeat (8) @(posedge aclk);
         aresetn <= 1'b1;
@@ -288,30 +336,34 @@ module tb_ws281x_consumer;
         end
 
         ctl_read(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, read_data);
-        if (read_data != 32'h0000_0004) begin
+        if (read_data != 32'h0000_001e) begin
             $fatal(1, "default active output count is %08x", read_data);
         end
         ctl_read(PL_CONTROL_OUTPUT_INVERT_MASK_OFFSET, read_data);
-        if (read_data != 32'h0000_000f) begin
+        if (read_data != 32'h3fff_ffff) begin
             $fatal(1, "default output invert mask is %08x", read_data);
         end
-        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0003);
-        ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0001);
-        ctl_write(PL_CONTROL_STRAND1_PIXEL_COUNT_OFFSET, 32'h0000_0002);
-        ctl_write(PL_CONTROL_STRAND2_PIXEL_COUNT_OFFSET, 32'h0000_0001);
-        ctl_write(PL_CONTROL_STRAND3_PIXEL_COUNT_OFFSET, 32'h0000_0000);
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0004);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + 12'h000, 32'h0000_0001);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + 12'h004, 32'h0000_0002);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + 12'h008, 32'h0000_0001);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + 12'h00c, 32'h0000_0000);
         ctl_read(PL_CONTROL_CONFIG_STATUS_OFFSET, read_data);
         if ((read_data & 32'h0000_0001) != 0) begin
             $fatal(1, "valid runtime config set sticky invalid: %08x", read_data);
         end
-        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0005);
-        ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0003);
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0029);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + 12'h000, 32'h0000_0003);
         ctl_read(PL_CONTROL_CONFIG_STATUS_OFFSET, read_data);
-        if ((read_data & 32'h0000_0103) != 32'h0000_0103) begin
+        if ((read_data & 32'h0000_0003) != 32'h0000_0003) begin
             $fatal(1, "invalid runtime config did not report clamp/sticky status: %08x", read_data);
         end
-        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0003);
-        ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0001);
+        ctl_read(PL_CONTROL_STRAND_LENGTH_CLAMPED_OFFSET, read_data);
+        if ((read_data & 32'h0000_0001) == 0) begin
+            $fatal(1, "invalid runtime config did not report strand clamp mask: %08x", read_data);
+        end
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0004);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + 12'h000, 32'h0000_0001);
         ctl_write(PL_CONTROL_CONTROL_OFFSET, PL_CONTROL_CONTROL_CLEAR_ERRORS);
         ctl_read(PL_CONTROL_CONFIG_STATUS_OFFSET, read_data);
         if ((read_data & 32'h0000_0001) != 0) begin
@@ -336,6 +388,10 @@ module tb_ws281x_consumer;
         ctl_write(PL_CONTROL_CONSUMER_CONTROL_OFFSET, PL_CONTROL_CONSUMER_RESET);
         ctl_write(PL_CONTROL_CONTROL_OFFSET, PL_CONTROL_CONTROL_CLEAR_ERRORS);
         monitor_runtime_config_reads <= 1'b1;
+        clear_expected_reads();
+        expect_output_length(0, 1);
+        expect_output_length(1, 2);
+        expect_output_length(2, 1);
         ctl_write(PL_CONTROL_CONSUMER_CONTROL_OFFSET, PL_CONTROL_CONSUMER_ENABLE);
 
         for (i = 0; i < 200000; i = i + 1) begin
@@ -409,16 +465,92 @@ module tb_ws281x_consumer;
                 if (read_data != 32'h0000_0002) begin
                     $fatal(1, "consumer sequence is %08x", read_data);
                 end
+                check_expected_reads("mixed-length 4-output");
                 i = 200000;
             end
         end
 
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, OUTPUT_COUNT);
+        for (i = 0; i < OUTPUT_COUNT; i = i + 1) begin
+            ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + (i[AXIL_ADDR_WIDTH-1:0] << 2), 32'h0000_0001);
+        end
+        clear_expected_reads();
+        for (i = 0; i < OUTPUT_COUNT; i = i + 1) begin
+            expect_output_length(i, 1);
+        end
+        ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
+        for (i = 0; i < OUTPUT_COUNT * PIXELS_PER_OUTPUT; i = i + 1) begin
+            word_addr = (read_data * bank_words) + i;
+            ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0203_0405 + i);
+        end
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31) | 32'h0000_003b);
+        for (i = 0; i < 200000; i = i + 1) begin
+            ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
+            if (read_data == 32'h0000_0003) begin
+                i = 200000;
+            end
+        end
+        ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
+        if (read_data != 32'h0000_0003) begin
+            $fatal(1, "30-output consumer frame did not complete");
+        end
+        check_expected_reads("30-output length-1");
+
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, OUTPUT_COUNT);
+        for (i = 0; i < OUTPUT_COUNT; i = i + 1) begin
+            ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + (i[AXIL_ADDR_WIDTH-1:0] << 2), 32'h0000_0000);
+        end
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + 12'h000, 32'h0000_0001);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + 12'h008, 32'h0000_0001);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + ((OUTPUT_COUNT - 1) << 2), 32'h0000_0001);
+        clear_expected_reads();
+        expect_output_length(0, 1);
+        expect_output_length(2, 1);
+        expect_output_length(OUTPUT_COUNT - 1, 1);
+        ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
+        for (i = 0; i < OUTPUT_COUNT * PIXELS_PER_OUTPUT; i = i + 1) begin
+            word_addr = (read_data * bank_words) + i;
+            ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0405_0607 + i);
+        end
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31) | 32'h0000_003b);
+        for (i = 0; i < 200000; i = i + 1) begin
+            ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
+            if (read_data == 32'h0000_0004) begin
+                i = 200000;
+            end
+        end
+        ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
+        if (read_data != 32'h0000_0004) begin
+            $fatal(1, "30-output sparse consumer frame did not complete");
+        end
+        check_expected_reads("30-output sparse");
+
+        ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0001);
+        ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET, 32'h0000_0001);
+        clear_expected_reads();
+        expect_output_length(0, 1);
+        ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
+        word_addr = read_data * bank_words;
+        ram_write(word_addr[FRAME_ADDR_WIDTH-3:0] << 2, 32'h0304_0506);
+        ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31) | 32'h0000_0001);
+        for (i = 0; i < 200000; i = i + 1) begin
+            ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
+            if (read_data == 32'h0000_0005) begin
+                i = 200000;
+            end
+        end
+        ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
+        if (read_data != 32'h0000_0005) begin
+            $fatal(1, "1-output consumer frame did not complete");
+        end
+        check_expected_reads("1-output");
+
         ctl_write(PL_CONTROL_ACTIVE_OUTPUT_COUNT_OFFSET, 32'h0000_0000);
-        ctl_write(PL_CONTROL_STRAND0_PIXEL_COUNT_OFFSET, 32'h0000_0000);
-        ctl_write(PL_CONTROL_STRAND1_PIXEL_COUNT_OFFSET, 32'h0000_0000);
-        ctl_write(PL_CONTROL_STRAND2_PIXEL_COUNT_OFFSET, 32'h0000_0000);
-        ctl_write(PL_CONTROL_STRAND3_PIXEL_COUNT_OFFSET, 32'h0000_0000);
+        for (i = 0; i < OUTPUT_COUNT; i = i + 1) begin
+            ctl_write(PL_CONTROL_STRAND_PIXEL_COUNT_OFFSET + (i[AXIL_ADDR_WIDTH-1:0] << 2), 32'h0000_0000);
+        end
         monitor_no_frame_reads <= 1'b1;
+        monitor_expected_reads <= 1'b0;
         ctl_read(PL_CONTROL_WRITE_BANK_OFFSET, read_data);
         ctl_write(PL_CONTROL_FRAME_COMMIT_OFFSET, (read_data << 31));
         ctl_read(PL_CONTROL_COMMITTED_WORDS_OFFSET, read_data);
@@ -428,7 +560,7 @@ module tb_ws281x_consumer;
 
         for (i = 0; i < 200000; i = i + 1) begin
             ctl_read(PL_CONTROL_CONSUMER_FRAME_COUNT_OFFSET, read_data);
-            if (read_data == 32'h0000_0003) begin
+            if (read_data == 32'h0000_0006) begin
                 ctl_read(PL_CONTROL_CONSUMER_ERROR_COUNT_OFFSET, read_data);
                 if (read_data != 32'h0000_0000) begin
                     $fatal(1, "zero-active consumer error count is %08x", read_data);

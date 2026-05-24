@@ -2,9 +2,9 @@
 
 module ws281x_controller_core #(
     parameter AXIL_ADDR_WIDTH = 12,
-    parameter FRAME_WORDS = 8192,
-    parameter FRAME_ADDR_WIDTH = 15,
-    parameter OUTPUT_COUNT = 4,
+    parameter FRAME_WORDS = 61440,
+    parameter FRAME_ADDR_WIDTH = 19,
+    parameter OUTPUT_COUNT = 30,
     parameter PIXELS_PER_OUTPUT = 1024,
     parameter CLK_HZ = 100000000,
     parameter WS281X_BIT_RATE = 800000
@@ -75,10 +75,7 @@ module ws281x_controller_core #(
     wire [31:0] consumer_active_bank;
     wire [31:0] consumer_debug;
     wire [$clog2(OUTPUT_COUNT+1)-1:0] runtime_active_output_count;
-    wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand0_pixel_count;
-    wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand1_pixel_count;
-    wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand2_pixel_count;
-    wire [$clog2(PIXELS_PER_OUTPUT+1)-1:0] runtime_strand3_pixel_count;
+    wire [(OUTPUT_COUNT*$clog2(PIXELS_PER_OUTPUT+1))-1:0] runtime_strand_pixel_count;
     wire [OUTPUT_COUNT-1:0] runtime_output_invert_mask;
 
     pl_frame_control #(
@@ -122,10 +119,7 @@ module ws281x_controller_core #(
         .committed_words(committed_words),
         .frame_sequence(frame_sequence),
         .runtime_active_output_count(runtime_active_output_count),
-        .runtime_strand0_pixel_count(runtime_strand0_pixel_count),
-        .runtime_strand1_pixel_count(runtime_strand1_pixel_count),
-        .runtime_strand2_pixel_count(runtime_strand2_pixel_count),
-        .runtime_strand3_pixel_count(runtime_strand3_pixel_count),
+        .runtime_strand_pixel_count(runtime_strand_pixel_count),
         .runtime_output_invert_mask(runtime_output_invert_mask)
     );
 
@@ -145,10 +139,7 @@ module ws281x_controller_core #(
         .committed_words(committed_words),
         .frame_sequence(frame_sequence),
         .runtime_active_output_count(runtime_active_output_count),
-        .runtime_strand0_pixel_count(runtime_strand0_pixel_count),
-        .runtime_strand1_pixel_count(runtime_strand1_pixel_count),
-        .runtime_strand2_pixel_count(runtime_strand2_pixel_count),
-        .runtime_strand3_pixel_count(runtime_strand3_pixel_count),
+        .runtime_strand_pixel_count(runtime_strand_pixel_count),
         .runtime_output_invert_mask(runtime_output_invert_mask),
         .busy(consumer_busy),
         .reset_low(consumer_reset_low),

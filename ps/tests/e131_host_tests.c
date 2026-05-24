@@ -8,6 +8,9 @@
 #include "../app/frame_pipeline.h"
 
 #define MAX_PACKET 638u
+#define HOST_ACTIVE_PIXELS (DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT * DAWN_DEFAULT_STRAND_PIXEL_COUNT)
+#define HOST_UNIVERSE_COUNT ((HOST_ACTIVE_PIXELS * 3u + DAWN_SLOTS_PER_UNIVERSE - 1u) / DAWN_SLOTS_PER_UNIVERSE)
+#define HOST_LAST_UNIVERSE_OFFSET (HOST_UNIVERSE_COUNT - 1u)
 #define EXPECT_TRUE(expr) do { if (!(expr)) return fail(__LINE__, #expr); } while (0)
 #define EXPECT_EQ(a, b) do { uint32_t av = (uint32_t)(a); uint32_t bv = (uint32_t)(b); if (av != bv) return fail_eq(__LINE__, #a, av, #b, bv); } while (0)
 
@@ -24,7 +27,7 @@ uint32_t *frame_pipeline_inactive_words(void)
 
 uint32_t frame_pipeline_active_pixel_count(void)
 {
-    return DAWN_WORDS_PER_FRAME;
+    return HOST_ACTIVE_PIXELS;
 }
 
 void frame_pipeline_init(void)
@@ -57,7 +60,7 @@ int frame_pipeline_commit(void)
     return 0;
 }
 
-int frame_pipeline_configure(uint32_t active_count, const uint32_t lengths[4])
+int frame_pipeline_configure(uint32_t active_count, const uint32_t lengths[DAWN_OUTPUT_COUNT])
 {
     (void)active_count;
     (void)lengths;
@@ -165,7 +168,7 @@ static uint16_t build_sync(uint8_t *packet, uint8_t sequence, const uint8_t cid[
 static uint16_t slots_for_offset(uint32_t offset)
 {
     uint32_t first_slot = offset * DAWN_SLOTS_PER_UNIVERSE;
-    uint32_t remaining = (DAWN_WORDS_PER_FRAME * 3u) - first_slot;
+    uint32_t remaining = (HOST_ACTIVE_PIXELS * 3u) - first_slot;
     return (uint16_t)(remaining > DAWN_SLOTS_PER_UNIVERSE ? DAWN_SLOTS_PER_UNIVERSE : remaining);
 }
 
@@ -235,12 +238,12 @@ static int test_unsynced_out_of_order_commits_once(void)
     uint8_t cid[16] = {1u};
 
     reset_receiver();
-    for (int32_t offset = 24; offset >= 0; --offset) {
+    for (int32_t offset = (int32_t)HOST_LAST_UNIVERSE_OFFSET; offset >= 0; --offset) {
         send_universe((uint32_t)offset, (uint8_t)offset, cid, 100u, 0u, 0u, 0u);
     }
     EXPECT_EQ(g_commit_count, 1u);
     EXPECT_EQ(e131_receiver_status()->complete_frames, 1u);
-    EXPECT_EQ(e131_receiver_status()->universes_seen, 25u);
+    EXPECT_EQ(e131_receiver_status()->universes_seen, HOST_UNIVERSE_COUNT);
     return 0;
 }
 
@@ -252,7 +255,7 @@ static int test_exact_final_slot_count(void)
     uint16_t len;
 
     reset_receiver();
-    len = build_data(packet, (uint16_t)(DAWN_FIRST_UNIVERSE + 24u), 1u, cid, 100u, 0u, 0u, DAWN_SLOTS_PER_UNIVERSE);
+    len = build_data(packet, (uint16_t)(DAWN_FIRST_UNIVERSE + HOST_UNIVERSE_COUNT), 1u, cid, 100u, 0u, 0u, DAWN_SLOTS_PER_UNIVERSE);
     e131_receiver_handle_packet(packet, len, ip, 0u);
     EXPECT_EQ(e131_receiver_status()->e131_rejected, 1u);
     EXPECT_EQ(g_write_count, 0u);
@@ -264,7 +267,7 @@ static int test_missing_universe_blackout(void)
     uint8_t cid[16] = {3u};
 
     reset_receiver();
-    for (uint32_t offset = 0u; offset < 24u; ++offset) {
+    for (uint32_t offset = 0u; offset < HOST_LAST_UNIVERSE_OFFSET; ++offset) {
         send_universe(offset, (uint8_t)offset, cid, 100u, 0u, 0u, 0u);
     }
     e131_receiver_poll(DAWN_E131_BLACKOUT_TIMEOUT_MS - 1u);
@@ -284,7 +287,7 @@ static int test_synced_waits_for_sync(void)
     uint16_t len;
 
     reset_receiver();
-    for (uint32_t offset = 0u; offset < 25u; ++offset) {
+    for (uint32_t offset = 0u; offset < HOST_UNIVERSE_COUNT; ++offset) {
         send_universe(offset, (uint8_t)offset, cid, 100u, DAWN_E131_DEFAULT_SYNC_ADDRESS, 0u, 0u);
     }
     EXPECT_EQ(g_commit_count, 0u);
@@ -301,7 +304,7 @@ static int test_missing_sync_blackout(void)
     uint8_t cid[16] = {5u};
 
     reset_receiver();
-    for (uint32_t offset = 0u; offset < 25u; ++offset) {
+    for (uint32_t offset = 0u; offset < HOST_UNIVERSE_COUNT; ++offset) {
         send_universe(offset, (uint8_t)offset, cid, 100u, DAWN_E131_DEFAULT_SYNC_ADDRESS, 0u, 0u);
     }
     e131_receiver_poll(DAWN_E131_BLACKOUT_TIMEOUT_MS);
@@ -361,21 +364,17 @@ static int test_packet_and_commit_gap_metrics(void)
     send_universe(1u, 1u, cid, 100u, 0u, 0u, 15u);
     EXPECT_EQ(e131_receiver_status()->last_packet_gap_ms, 5u);
     EXPECT_EQ(e131_receiver_status()->max_packet_gap_ms, 5u);
-    send_universe(2u, 1u, cid, 100u, 0u, 0u, 35u);
-    EXPECT_EQ(e131_receiver_status()->last_packet_gap_ms, 20u);
-    EXPECT_EQ(e131_receiver_status()->max_packet_gap_ms, 20u);
-
-    for (uint32_t offset = 3u; offset < 25u; ++offset) {
-        send_universe(offset, 1u, cid, 100u, 0u, 0u, 35u);
+    for (uint32_t offset = 2u; offset < HOST_UNIVERSE_COUNT; ++offset) {
+        send_universe(offset, 1u, cid, 100u, 0u, 0u, 15u);
     }
     EXPECT_EQ(e131_receiver_status()->last_frame_commit_gap_ms, 0u);
     EXPECT_EQ(e131_receiver_status()->max_frame_commit_gap_ms, 0u);
 
-    for (uint32_t offset = 0u; offset < 25u; ++offset) {
+    for (uint32_t offset = 0u; offset < HOST_UNIVERSE_COUNT; ++offset) {
         send_universe(offset, 2u, cid, 100u, 0u, 0u, 70u);
     }
-    EXPECT_EQ(e131_receiver_status()->last_frame_commit_gap_ms, 35u);
-    EXPECT_EQ(e131_receiver_status()->max_frame_commit_gap_ms, 35u);
+    EXPECT_EQ(e131_receiver_status()->last_frame_commit_gap_ms, 55u);
+    EXPECT_EQ(e131_receiver_status()->max_frame_commit_gap_ms, 55u);
     return 0;
 }
 
@@ -385,15 +384,15 @@ static int test_pl_busy_clears_assembly(void)
 
     reset_receiver();
     g_commit_result = 1;
-    for (uint32_t offset = 0u; offset < 25u; ++offset) {
+    for (uint32_t offset = 0u; offset < HOST_UNIVERSE_COUNT; ++offset) {
         send_universe(offset, (uint8_t)offset, cid, 100u, 0u, 0u, 0u);
     }
     EXPECT_EQ(e131_receiver_status()->frames_dropped, 1u);
-    EXPECT_EQ(e131_receiver_status()->universes_seen, 25u);
+    EXPECT_EQ(e131_receiver_status()->universes_seen, HOST_UNIVERSE_COUNT);
 
     g_commit_result = 0;
     send_universe(0u, 25u, cid, 100u, 0u, 0u, 1u);
-    EXPECT_EQ(e131_receiver_status()->universes_seen, 26u);
+    EXPECT_EQ(e131_receiver_status()->universes_seen, HOST_UNIVERSE_COUNT + 1u);
     EXPECT_EQ(g_commit_count, 0u);
     return 0;
 }

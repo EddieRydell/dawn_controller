@@ -1,0 +1,18 @@
+# Generated from hw/regs/pl_control.rdl. Do not edit.
+set dawn_pl_output_count 30
+set dawn_pl_pin_output_count 30
+set dawn_pl_pixels_per_output 1024
+set dawn_pl_default_active_output_count 30
+set dawn_pl_default_strand_pixel_count 50
+set dawn_pl_default_output_invert_mask 1073741823
+set dawn_pl_ws281x_bit_rate 800000
+set dawn_pl_frame_banks 2
+set dawn_pl_frame_words_per_bank 30720
+set dawn_pl_frame_words 61440
+set dawn_pl_frame_bytes 245760
+set dawn_pl_frame_addr_width 18
+set dawn_pl_frame_range_bytes 262144
+set dawn_pl_mask_word_count 1
+set dawn_pl_output_index_width 5
+set dawn_pl_active_output_width 5
+set dawn_pl_pixel_count_width 11

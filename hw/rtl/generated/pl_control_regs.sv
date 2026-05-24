@@ -258,12 +258,10 @@ module pl_control_regs (
         logic FRAME_REJECTED;
         logic FRAME_DROP_NOTIFY;
         logic ACTIVE_OUTPUT_COUNT;
-        logic STRAND0_PIXEL_COUNT;
-        logic STRAND1_PIXEL_COUNT;
-        logic STRAND2_PIXEL_COUNT;
-        logic STRAND3_PIXEL_COUNT;
+        logic STRAND_PIXEL_COUNT[30];
         logic CONFIG_STATUS;
-        logic OUTPUT_INVERT_MASK;
+        logic STRAND_LENGTH_CLAMPED[1];
+        logic OUTPUT_INVERT_MASK[1];
     } decoded_reg_strb_t;
     decoded_reg_strb_t decoded_reg_strb;
     logic decoded_err;
@@ -310,12 +308,16 @@ module pl_control_regs (
         decoded_reg_strb.FRAME_REJECTED = cpuif_req_masked & (cpuif_addr == 12'h78) & !cpuif_req_is_wr;
         decoded_reg_strb.FRAME_DROP_NOTIFY = cpuif_req_masked & (cpuif_addr == 12'h7c) & cpuif_req_is_wr;
         decoded_reg_strb.ACTIVE_OUTPUT_COUNT = cpuif_req_masked & (cpuif_addr == 12'h80);
-        decoded_reg_strb.STRAND0_PIXEL_COUNT = cpuif_req_masked & (cpuif_addr == 12'h84);
-        decoded_reg_strb.STRAND1_PIXEL_COUNT = cpuif_req_masked & (cpuif_addr == 12'h88);
-        decoded_reg_strb.STRAND2_PIXEL_COUNT = cpuif_req_masked & (cpuif_addr == 12'h8c);
-        decoded_reg_strb.STRAND3_PIXEL_COUNT = cpuif_req_masked & (cpuif_addr == 12'h90);
-        decoded_reg_strb.CONFIG_STATUS = cpuif_req_masked & (cpuif_addr == 12'h94) & !cpuif_req_is_wr;
-        decoded_reg_strb.OUTPUT_INVERT_MASK = cpuif_req_masked & (cpuif_addr == 12'h98);
+        for(int i0=0; i0<30; i0++) begin
+            decoded_reg_strb.STRAND_PIXEL_COUNT[i0] = cpuif_req_masked & (cpuif_addr == 12'h84 + (12)'(i0) * 12'h4);
+        end
+        decoded_reg_strb.CONFIG_STATUS = cpuif_req_masked & (cpuif_addr == 12'hfc) & !cpuif_req_is_wr;
+        for(int i0=0; i0<1; i0++) begin
+            decoded_reg_strb.STRAND_LENGTH_CLAMPED[i0] = cpuif_req_masked & (cpuif_addr == 12'h100 + (12)'(i0) * 12'h4) & !cpuif_req_is_wr;
+        end
+        for(int i0=0; i0<1; i0++) begin
+            decoded_reg_strb.OUTPUT_INVERT_MASK[i0] = cpuif_req_masked & (cpuif_addr == 12'h104 + (12)'(i0) * 12'h4);
+        end
         decoded_err = '0;
     end
 
@@ -395,31 +397,13 @@ module pl_control_regs (
                 logic [31:0] next;
                 logic load_next;
             } value;
-        } STRAND0_PIXEL_COUNT;
+        } STRAND_PIXEL_COUNT[30];
         struct {
             struct {
                 logic [31:0] next;
                 logic load_next;
             } value;
-        } STRAND1_PIXEL_COUNT;
-        struct {
-            struct {
-                logic [31:0] next;
-                logic load_next;
-            } value;
-        } STRAND2_PIXEL_COUNT;
-        struct {
-            struct {
-                logic [31:0] next;
-                logic load_next;
-            } value;
-        } STRAND3_PIXEL_COUNT;
-        struct {
-            struct {
-                logic [3:0] next;
-                logic load_next;
-            } value;
-        } OUTPUT_INVERT_MASK;
+        } OUTPUT_INVERT_MASK[1];
     } field_combo_t;
     field_combo_t field_combo;
 
@@ -477,27 +461,12 @@ module pl_control_regs (
             struct {
                 logic [31:0] value;
             } value;
-        } STRAND0_PIXEL_COUNT;
+        } STRAND_PIXEL_COUNT[30];
         struct {
             struct {
                 logic [31:0] value;
             } value;
-        } STRAND1_PIXEL_COUNT;
-        struct {
-            struct {
-                logic [31:0] value;
-            } value;
-        } STRAND2_PIXEL_COUNT;
-        struct {
-            struct {
-                logic [31:0] value;
-            } value;
-        } STRAND3_PIXEL_COUNT;
-        struct {
-            struct {
-                logic [3:0] value;
-            } value;
-        } OUTPUT_INVERT_MASK;
+        } OUTPUT_INVERT_MASK[1];
     } field_storage_t;
     field_storage_t field_storage;
 
@@ -763,7 +732,7 @@ module pl_control_regs (
     end
     always_ff @(posedge clk) begin
         if(~rst_n) begin
-            field_storage.ACTIVE_OUTPUT_COUNT.value.value <= 32'h4;
+            field_storage.ACTIVE_OUTPUT_COUNT.value.value <= 32'h1e;
         end else begin
             if(field_combo.ACTIVE_OUTPUT_COUNT.value.load_next) begin
                 field_storage.ACTIVE_OUTPUT_COUNT.value.value <= field_combo.ACTIVE_OUTPUT_COUNT.value.next;
@@ -772,125 +741,57 @@ module pl_control_regs (
     end
     assign hwif_out.ACTIVE_OUTPUT_COUNT.value.value = field_storage.ACTIVE_OUTPUT_COUNT.value.value;
     assign hwif_out.ACTIVE_OUTPUT_COUNT.value.swmod = decoded_reg_strb.ACTIVE_OUTPUT_COUNT && decoded_req_is_wr && |(decoded_wr_biten[31:0]);
-    // Field: pl_control.STRAND0_PIXEL_COUNT.value
-    always_comb begin
-        automatic logic [31:0] next_c;
-        automatic logic load_next_c;
-        next_c = field_storage.STRAND0_PIXEL_COUNT.value.value;
-        load_next_c = '0;
-        if(decoded_reg_strb.STRAND0_PIXEL_COUNT && decoded_req_is_wr) begin // SW write
-            next_c = (field_storage.STRAND0_PIXEL_COUNT.value.value & ~decoded_wr_biten[31:0]) | (decoded_wr_data[31:0] & decoded_wr_biten[31:0]);
-            load_next_c = '1;
+    for(genvar i0=0; i0<30; i0++) begin
+        // Field: pl_control.STRAND_PIXEL_COUNT[].value
+        always_comb begin
+            automatic logic [31:0] next_c;
+            automatic logic load_next_c;
+            next_c = field_storage.STRAND_PIXEL_COUNT[i0].value.value;
+            load_next_c = '0;
+            if(decoded_reg_strb.STRAND_PIXEL_COUNT[i0] && decoded_req_is_wr) begin // SW write
+                next_c = (field_storage.STRAND_PIXEL_COUNT[i0].value.value & ~decoded_wr_biten[31:0]) | (decoded_wr_data[31:0] & decoded_wr_biten[31:0]);
+                load_next_c = '1;
+            end
+            field_combo.STRAND_PIXEL_COUNT[i0].value.next = next_c;
+            field_combo.STRAND_PIXEL_COUNT[i0].value.load_next = load_next_c;
         end
-        field_combo.STRAND0_PIXEL_COUNT.value.next = next_c;
-        field_combo.STRAND0_PIXEL_COUNT.value.load_next = load_next_c;
-    end
-    always_ff @(posedge clk) begin
-        if(~rst_n) begin
-            field_storage.STRAND0_PIXEL_COUNT.value.value <= 32'h400;
-        end else begin
-            if(field_combo.STRAND0_PIXEL_COUNT.value.load_next) begin
-                field_storage.STRAND0_PIXEL_COUNT.value.value <= field_combo.STRAND0_PIXEL_COUNT.value.next;
+        always_ff @(posedge clk) begin
+            if(~rst_n) begin
+                field_storage.STRAND_PIXEL_COUNT[i0].value.value <= 32'h32;
+            end else begin
+                if(field_combo.STRAND_PIXEL_COUNT[i0].value.load_next) begin
+                    field_storage.STRAND_PIXEL_COUNT[i0].value.value <= field_combo.STRAND_PIXEL_COUNT[i0].value.next;
+                end
             end
         end
+        assign hwif_out.STRAND_PIXEL_COUNT[i0].value.value = field_storage.STRAND_PIXEL_COUNT[i0].value.value;
+        assign hwif_out.STRAND_PIXEL_COUNT[i0].value.swmod = decoded_reg_strb.STRAND_PIXEL_COUNT[i0] && decoded_req_is_wr && |(decoded_wr_biten[31:0]);
     end
-    assign hwif_out.STRAND0_PIXEL_COUNT.value.value = field_storage.STRAND0_PIXEL_COUNT.value.value;
-    assign hwif_out.STRAND0_PIXEL_COUNT.value.swmod = decoded_reg_strb.STRAND0_PIXEL_COUNT && decoded_req_is_wr && |(decoded_wr_biten[31:0]);
-    // Field: pl_control.STRAND1_PIXEL_COUNT.value
-    always_comb begin
-        automatic logic [31:0] next_c;
-        automatic logic load_next_c;
-        next_c = field_storage.STRAND1_PIXEL_COUNT.value.value;
-        load_next_c = '0;
-        if(decoded_reg_strb.STRAND1_PIXEL_COUNT && decoded_req_is_wr) begin // SW write
-            next_c = (field_storage.STRAND1_PIXEL_COUNT.value.value & ~decoded_wr_biten[31:0]) | (decoded_wr_data[31:0] & decoded_wr_biten[31:0]);
-            load_next_c = '1;
+    for(genvar i0=0; i0<1; i0++) begin
+        // Field: pl_control.OUTPUT_INVERT_MASK[].value
+        always_comb begin
+            automatic logic [31:0] next_c;
+            automatic logic load_next_c;
+            next_c = field_storage.OUTPUT_INVERT_MASK[i0].value.value;
+            load_next_c = '0;
+            if(decoded_reg_strb.OUTPUT_INVERT_MASK[i0] && decoded_req_is_wr) begin // SW write
+                next_c = (field_storage.OUTPUT_INVERT_MASK[i0].value.value & ~decoded_wr_biten[31:0]) | (decoded_wr_data[31:0] & decoded_wr_biten[31:0]);
+                load_next_c = '1;
+            end
+            field_combo.OUTPUT_INVERT_MASK[i0].value.next = next_c;
+            field_combo.OUTPUT_INVERT_MASK[i0].value.load_next = load_next_c;
         end
-        field_combo.STRAND1_PIXEL_COUNT.value.next = next_c;
-        field_combo.STRAND1_PIXEL_COUNT.value.load_next = load_next_c;
-    end
-    always_ff @(posedge clk) begin
-        if(~rst_n) begin
-            field_storage.STRAND1_PIXEL_COUNT.value.value <= 32'h400;
-        end else begin
-            if(field_combo.STRAND1_PIXEL_COUNT.value.load_next) begin
-                field_storage.STRAND1_PIXEL_COUNT.value.value <= field_combo.STRAND1_PIXEL_COUNT.value.next;
+        always_ff @(posedge clk) begin
+            if(~rst_n) begin
+                field_storage.OUTPUT_INVERT_MASK[i0].value.value <= 32'h3fffffff;
+            end else begin
+                if(field_combo.OUTPUT_INVERT_MASK[i0].value.load_next) begin
+                    field_storage.OUTPUT_INVERT_MASK[i0].value.value <= field_combo.OUTPUT_INVERT_MASK[i0].value.next;
+                end
             end
         end
+        assign hwif_out.OUTPUT_INVERT_MASK[i0].value.value = field_storage.OUTPUT_INVERT_MASK[i0].value.value;
     end
-    assign hwif_out.STRAND1_PIXEL_COUNT.value.value = field_storage.STRAND1_PIXEL_COUNT.value.value;
-    assign hwif_out.STRAND1_PIXEL_COUNT.value.swmod = decoded_reg_strb.STRAND1_PIXEL_COUNT && decoded_req_is_wr && |(decoded_wr_biten[31:0]);
-    // Field: pl_control.STRAND2_PIXEL_COUNT.value
-    always_comb begin
-        automatic logic [31:0] next_c;
-        automatic logic load_next_c;
-        next_c = field_storage.STRAND2_PIXEL_COUNT.value.value;
-        load_next_c = '0;
-        if(decoded_reg_strb.STRAND2_PIXEL_COUNT && decoded_req_is_wr) begin // SW write
-            next_c = (field_storage.STRAND2_PIXEL_COUNT.value.value & ~decoded_wr_biten[31:0]) | (decoded_wr_data[31:0] & decoded_wr_biten[31:0]);
-            load_next_c = '1;
-        end
-        field_combo.STRAND2_PIXEL_COUNT.value.next = next_c;
-        field_combo.STRAND2_PIXEL_COUNT.value.load_next = load_next_c;
-    end
-    always_ff @(posedge clk) begin
-        if(~rst_n) begin
-            field_storage.STRAND2_PIXEL_COUNT.value.value <= 32'h400;
-        end else begin
-            if(field_combo.STRAND2_PIXEL_COUNT.value.load_next) begin
-                field_storage.STRAND2_PIXEL_COUNT.value.value <= field_combo.STRAND2_PIXEL_COUNT.value.next;
-            end
-        end
-    end
-    assign hwif_out.STRAND2_PIXEL_COUNT.value.value = field_storage.STRAND2_PIXEL_COUNT.value.value;
-    assign hwif_out.STRAND2_PIXEL_COUNT.value.swmod = decoded_reg_strb.STRAND2_PIXEL_COUNT && decoded_req_is_wr && |(decoded_wr_biten[31:0]);
-    // Field: pl_control.STRAND3_PIXEL_COUNT.value
-    always_comb begin
-        automatic logic [31:0] next_c;
-        automatic logic load_next_c;
-        next_c = field_storage.STRAND3_PIXEL_COUNT.value.value;
-        load_next_c = '0;
-        if(decoded_reg_strb.STRAND3_PIXEL_COUNT && decoded_req_is_wr) begin // SW write
-            next_c = (field_storage.STRAND3_PIXEL_COUNT.value.value & ~decoded_wr_biten[31:0]) | (decoded_wr_data[31:0] & decoded_wr_biten[31:0]);
-            load_next_c = '1;
-        end
-        field_combo.STRAND3_PIXEL_COUNT.value.next = next_c;
-        field_combo.STRAND3_PIXEL_COUNT.value.load_next = load_next_c;
-    end
-    always_ff @(posedge clk) begin
-        if(~rst_n) begin
-            field_storage.STRAND3_PIXEL_COUNT.value.value <= 32'h400;
-        end else begin
-            if(field_combo.STRAND3_PIXEL_COUNT.value.load_next) begin
-                field_storage.STRAND3_PIXEL_COUNT.value.value <= field_combo.STRAND3_PIXEL_COUNT.value.next;
-            end
-        end
-    end
-    assign hwif_out.STRAND3_PIXEL_COUNT.value.value = field_storage.STRAND3_PIXEL_COUNT.value.value;
-    assign hwif_out.STRAND3_PIXEL_COUNT.value.swmod = decoded_reg_strb.STRAND3_PIXEL_COUNT && decoded_req_is_wr && |(decoded_wr_biten[31:0]);
-    // Field: pl_control.OUTPUT_INVERT_MASK.value
-    always_comb begin
-        automatic logic [3:0] next_c;
-        automatic logic load_next_c;
-        next_c = field_storage.OUTPUT_INVERT_MASK.value.value;
-        load_next_c = '0;
-        if(decoded_reg_strb.OUTPUT_INVERT_MASK && decoded_req_is_wr) begin // SW write
-            next_c = (field_storage.OUTPUT_INVERT_MASK.value.value & ~decoded_wr_biten[3:0]) | (decoded_wr_data[3:0] & decoded_wr_biten[3:0]);
-            load_next_c = '1;
-        end
-        field_combo.OUTPUT_INVERT_MASK.value.next = next_c;
-        field_combo.OUTPUT_INVERT_MASK.value.load_next = load_next_c;
-    end
-    always_ff @(posedge clk) begin
-        if(~rst_n) begin
-            field_storage.OUTPUT_INVERT_MASK.value.value <= 4'hf;
-        end else begin
-            if(field_combo.OUTPUT_INVERT_MASK.value.load_next) begin
-                field_storage.OUTPUT_INVERT_MASK.value.value <= field_combo.OUTPUT_INVERT_MASK.value.next;
-            end
-        end
-    end
-    assign hwif_out.OUTPUT_INVERT_MASK.value.value = field_storage.OUTPUT_INVERT_MASK.value.value;
 
     //--------------------------------------------------------------------------
     // Write response
@@ -916,7 +817,7 @@ module pl_control_regs (
             readback_data_var[31:0] = 32'h4546504c;
         end
         if(rd_mux_addr == 12'h4) begin
-            readback_data_var[31:0] = 32'h70000;
+            readback_data_var[31:0] = 32'h80000;
         end
         if(rd_mux_addr == 12'h8) begin
             readback_data_var[0] = field_storage.CONTROL.reserved.value;
@@ -987,7 +888,7 @@ module pl_control_regs (
             readback_data_var[31:0] = 32'hc3500;
         end
         if(rd_mux_addr == 12'h60) begin
-            readback_data_var[31:0] = 32'h4;
+            readback_data_var[31:0] = 32'h1e;
         end
         if(rd_mux_addr == 12'h64) begin
             readback_data_var[31:0] = 32'h400;
@@ -1010,25 +911,24 @@ module pl_control_regs (
         if(rd_mux_addr == 12'h80) begin
             readback_data_var[31:0] = field_storage.ACTIVE_OUTPUT_COUNT.value.value;
         end
-        if(rd_mux_addr == 12'h84) begin
-            readback_data_var[31:0] = field_storage.STRAND0_PIXEL_COUNT.value.value;
+        for(int i0=0; i0<30; i0++) begin
+            if(rd_mux_addr == 12'h84 + (12)'(i0) * 12'h4) begin
+                readback_data_var[31:0] = field_storage.STRAND_PIXEL_COUNT[i0].value.value;
+            end
         end
-        if(rd_mux_addr == 12'h88) begin
-            readback_data_var[31:0] = field_storage.STRAND1_PIXEL_COUNT.value.value;
-        end
-        if(rd_mux_addr == 12'h8c) begin
-            readback_data_var[31:0] = field_storage.STRAND2_PIXEL_COUNT.value.value;
-        end
-        if(rd_mux_addr == 12'h90) begin
-            readback_data_var[31:0] = field_storage.STRAND3_PIXEL_COUNT.value.value;
-        end
-        if(rd_mux_addr == 12'h94) begin
+        if(rd_mux_addr == 12'hfc) begin
             readback_data_var[0] = hwif_in.CONFIG_STATUS.config_invalid.next;
             readback_data_var[1] = hwif_in.CONFIG_STATUS.active_count_clamped.next;
-            readback_data_var[11:8] = hwif_in.CONFIG_STATUS.strand_length_clamped.next;
         end
-        if(rd_mux_addr == 12'h98) begin
-            readback_data_var[3:0] = field_storage.OUTPUT_INVERT_MASK.value.value;
+        for(int i0=0; i0<1; i0++) begin
+            if(rd_mux_addr == 12'h100 + (12)'(i0) * 12'h4) begin
+                readback_data_var[31:0] = hwif_in.STRAND_LENGTH_CLAMPED[i0].value.next;
+            end
+        end
+        for(int i0=0; i0<1; i0++) begin
+            if(rd_mux_addr == 12'h104 + (12)'(i0) * 12'h4) begin
+                readback_data_var[31:0] = field_storage.OUTPUT_INVERT_MASK[i0].value.value;
+            end
         end
         readback_data = readback_data_var;
         readback_done = decoded_req & ~decoded_req_is_wr;

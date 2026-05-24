@@ -3,7 +3,7 @@ set hw_server_url "TCP:localhost:3121"
 set bit_file [file join $repo_root build vivado dawn_controller.runs impl_1 dawn_system_wrapper.bit]
 set vitis_workspace [file join $repo_root build vitis]
 set pl_control_base 0x43C00000
-set pl_frame_base 0x43C10000
+set pl_frame_base 0x43C80000
 
 set slcr_unlock 0xF8000008
 set slcr_lock 0xF8000004
@@ -141,11 +141,13 @@ print_reg $pl_control_base 0x05c WS281X_BIT_RATE
 print_reg $pl_control_base 0x060 WS281X_OUTPUT_COUNT
 print_reg $pl_control_base 0x064 WS281X_PIXELS_PER_OUTPUT
 print_reg $pl_control_base 0x080 ACTIVE_OUTPUT_COUNT
-print_reg $pl_control_base 0x084 STRAND0_PIXEL_COUNT
-print_reg $pl_control_base 0x088 STRAND1_PIXEL_COUNT
-print_reg $pl_control_base 0x08c STRAND2_PIXEL_COUNT
-print_reg $pl_control_base 0x090 STRAND3_PIXEL_COUNT
-print_reg $pl_control_base 0x094 CONFIG_STATUS
+print_reg $pl_control_base 0x084 STRAND_PIXEL_COUNT0
+print_reg $pl_control_base 0x088 STRAND_PIXEL_COUNT1
+print_reg $pl_control_base 0x08c STRAND_PIXEL_COUNT2
+print_reg $pl_control_base 0x090 STRAND_PIXEL_COUNT3
+print_reg $pl_control_base 0x0fc CONFIG_STATUS
+print_reg $pl_control_base 0x100 STRAND_LENGTH_CLAMPED0
+print_reg $pl_control_base 0x104 OUTPUT_INVERT_MASK0
 print_reg $pl_control_base 0x068 CONSUMER_DEBUG
 print_reg $pl_control_base 0x06c WRITE_BANK_VALID
 print_reg $pl_control_base 0x070 BUSY_BANK
