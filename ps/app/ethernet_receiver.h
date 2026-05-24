@@ -6,6 +6,20 @@
 typedef struct {
     uint32_t rx_packets;
     uint32_t rx_bytes;
+    uint32_t rx_oversized;
+    uint32_t rx_ring_depth;
+    uint32_t rx_ring_high_water;
+    uint32_t rx_ring_dropped;
+    uint32_t rx_ring_processed;
+    uint32_t rx_pbuf_alloc_failures;
+    uint32_t rx_pbuf_pool_used;
+    uint32_t rx_pbuf_pool_max;
+    uint32_t rx_pbuf_pool_avail;
+    uint32_t rx_input_calls;
+    uint32_t rx_input_active_calls;
+    uint32_t rx_input_max_packets;
+    uint32_t rx_poll_max_drained;
+    uint32_t rx_poll_budget_hits;
     uint32_t e131_valid;
     uint32_t e131_rejected;
     uint32_t universes_seen;

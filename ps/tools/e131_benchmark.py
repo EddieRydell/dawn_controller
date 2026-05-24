@@ -33,6 +33,20 @@ MATRIX = {
 STATUS_KEYS = (
     "rx_packets",
     "rx_bytes",
+    "rx_oversized",
+    "rx_ring_depth",
+    "rx_ring_high_water",
+    "rx_ring_dropped",
+    "rx_ring_processed",
+    "rx_pbuf_alloc_failures",
+    "rx_pbuf_pool_used",
+    "rx_pbuf_pool_max",
+    "rx_pbuf_pool_avail",
+    "rx_input_calls",
+    "rx_input_active_calls",
+    "rx_input_max_packets",
+    "rx_poll_max_drained",
+    "rx_poll_budget_hits",
     "e131_valid",
     "e131_rejected",
     "frames_committed",
@@ -109,6 +123,9 @@ def classify(row: dict[str, int | float | str]) -> str:
     row["committed_fps"] = achieved
     hard_errors = (
         "rx_delta_e131_rejected",
+        "rx_delta_rx_oversized",
+        "rx_delta_rx_ring_dropped",
+        "rx_delta_rx_pbuf_alloc_failures",
         "rx_delta_frames_dropped",
         "rx_delta_incomplete_sweeps",
         "rx_delta_sequence_anomalies",
@@ -283,6 +300,10 @@ def write_summary(out_dir: Path, rows: list[dict[str, int | float | str]]) -> No
             notes = []
             if int(row.get("rx_delta_frames_dropped", 0) or 0):
                 notes.append(f"drops={row['rx_delta_frames_dropped']}")
+            if int(row.get("rx_delta_rx_ring_dropped", 0) or 0):
+                notes.append(f"ring_drops={row['rx_delta_rx_ring_dropped']}")
+            if int(row.get("rx_delta_rx_pbuf_alloc_failures", 0) or 0):
+                notes.append(f"pbuf_alloc={row['rx_delta_rx_pbuf_alloc_failures']}")
             if int(row.get("rx_delta_e131_rejected", 0) or 0):
                 notes.append(f"rejects={row['rx_delta_e131_rejected']}")
             if int(row.get("rx_delta_sequence_anomalies", 0) or 0):
@@ -307,6 +328,7 @@ def main() -> int:
     parser.add_argument("--rates", type=float, nargs="*", default=[])
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--sanity-only", action="store_true")
+    parser.add_argument("--skip-sanity-cell", action="store_true", help="Do not prepend the 30x50 @ 30 FPS sanity cell.")
     args = parser.parse_args()
 
     timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -316,7 +338,7 @@ def main() -> int:
     if not args.skip_build:
         run_checked(["make", "ps"], out_dir / "make_ps.log")
 
-    cells: list[tuple[int, float]] = [(50, 30.0)]
+    cells: list[tuple[int, float]] = [] if args.skip_sanity_cell else [(50, 30.0)]
     if not args.sanity_only:
         selected_pixels = args.pixels or list(MATRIX.keys())
         for pixels in selected_pixels:
@@ -364,6 +386,7 @@ def main() -> int:
             cell_status_start = max(0, len(capture.lines) - 1)
             before_line = capture.wait_for(r"^e131_status .*rx_packets=0 ", 8.0, start_index=cell_status_start)
             before = parse_kv_line(before_line)
+            capture.drain_pending()
             print(f"{cell_name}: sending {args.duration:g}s at target_fps={rate:g}", flush=True)
             sender = run_json(
                 [

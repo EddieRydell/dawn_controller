@@ -43,8 +43,11 @@ static uint16_t expected_slots_for_offset(uint32_t offset)
     return (uint16_t)(remaining > DAWN_SLOTS_PER_UNIVERSE ? DAWN_SLOTS_PER_UNIVERSE : remaining);
 }
 
-static int cid_equal(const uint8_t a[16], const uint8_t b[16])
+static int cid_equal(const uint8_t *a, const uint8_t *b)
 {
+    if (a == NULL || b == NULL) {
+        return 0;
+    }
     for (uint32_t i = 0u; i < 16u; ++i) {
         if (a[i] != b[i]) {
             return 0;
@@ -53,10 +56,10 @@ static int cid_equal(const uint8_t a[16], const uint8_t b[16])
     return 1;
 }
 
-static void copy_cid(uint8_t dst[16], const uint8_t src[16])
+static void copy_cid(uint8_t dst[16], const uint8_t *src)
 {
     for (uint32_t i = 0u; i < 16u; ++i) {
-        dst[i] = src[i];
+        dst[i] = src != NULL ? src[i] : 0u;
     }
 }
 

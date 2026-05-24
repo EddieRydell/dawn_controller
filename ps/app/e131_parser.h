@@ -18,8 +18,7 @@ typedef enum {
 } e131_parse_result_t;
 
 typedef struct {
-    uint8_t cid[16];
-    char source_name[65];
+    const uint8_t *cid;
     uint8_t priority;
     uint16_t universe;
     uint8_t sequence;
@@ -32,7 +31,7 @@ typedef struct {
 } e131_data_packet_t;
 
 typedef struct {
-    uint8_t cid[16];
+    const uint8_t *cid;
     uint8_t sequence;
     uint16_t sync_address;
 } e131_sync_packet_t;

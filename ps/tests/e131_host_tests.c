@@ -238,6 +238,7 @@ static int test_parser_metadata(void)
     uint16_t len = build_data(packet, 3u, 42u, cid, 150u, 63999u, 0x80u, DAWN_SLOTS_PER_UNIVERSE);
 
     EXPECT_EQ(e131_parse_data_packet(packet, len, DAWN_FIRST_UNIVERSE, DAWN_WORDS_PER_FRAME, &parsed), E131_PARSE_OK);
+    EXPECT_TRUE(parsed.cid == &packet[22]);
     EXPECT_EQ(parsed.cid[0], 0xdeu);
     EXPECT_EQ(parsed.priority, 150u);
     EXPECT_EQ(parsed.sync_address, 63999u);

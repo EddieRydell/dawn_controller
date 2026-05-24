@@ -20,6 +20,7 @@ RTL_SIM_DIR := build/rtl-sim
 SIDE_EFFECT_DIR := build/tool-side-effects
 PS_HOST_E131_TEST_EXE := build/ps-host-test/e131_host_tests.exe
 PS_HOST_FRAME_TEST_EXE := build/ps-host-test/frame_pipeline_host_tests.exe
+PS_HOST_RX_RING_TEST_EXE := build/ps-host-test/rx_packet_ring_host_tests.exe
 
 define collect_root_side_effects
 	$(PYTHON) make_helpers.py collect-root-side-effects $(SIDE_EFFECT_DIR)
@@ -76,9 +77,10 @@ $(XSA) $(BITSTREAM): hw/rtl/generated/pl_config_pkg.sv hw/rtl/generated/pl_contr
 
 ps: $(PS_STAMP)
 
-ps-host-test: $(PS_HOST_E131_TEST_EXE) $(PS_HOST_FRAME_TEST_EXE)
+ps-host-test: $(PS_HOST_E131_TEST_EXE) $(PS_HOST_FRAME_TEST_EXE) $(PS_HOST_RX_RING_TEST_EXE)
 	$(PS_HOST_E131_TEST_EXE)
 	$(PS_HOST_FRAME_TEST_EXE)
+	$(PS_HOST_RX_RING_TEST_EXE)
 
 $(PS_HOST_E131_TEST_EXE): ps/tests/e131_host_tests.c ps/app/e131_parser.c ps/app/e131_parser.h ps/app/e131_receiver.c ps/app/e131_receiver.h ps/app/app_config.c ps/app/app_config.h ps/app/generated/pl_config.h ps/app/frame_pipeline.h Makefile
 	$(PYTHON) make_helpers.py mkdir build/ps-host-test
@@ -87,6 +89,10 @@ $(PS_HOST_E131_TEST_EXE): ps/tests/e131_host_tests.c ps/app/e131_parser.c ps/app
 $(PS_HOST_FRAME_TEST_EXE): ps/tests/frame_pipeline_host_tests.c ps/app/frame_pipeline.c ps/app/frame_pipeline.h ps/app/pl_ingest.h ps/app/app_config.h ps/app/generated/pl_config.h Makefile
 	$(PYTHON) make_helpers.py mkdir build/ps-host-test
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Ips/app -o $(PS_HOST_FRAME_TEST_EXE) ps/tests/frame_pipeline_host_tests.c ps/app/frame_pipeline.c
+
+$(PS_HOST_RX_RING_TEST_EXE): ps/tests/rx_packet_ring_host_tests.c ps/app/rx_packet_ring.c ps/app/rx_packet_ring.h Makefile
+	$(PYTHON) make_helpers.py mkdir build/ps-host-test
+	$(HOST_CC) -std=c99 -Wall -Wextra -Werror -Ips/app -o $(PS_HOST_RX_RING_TEST_EXE) ps/tests/rx_packet_ring_host_tests.c ps/app/rx_packet_ring.c
 
 $(PS_STAMP): $(XSA) $(BITSTREAM) $(wildcard ps/app/*.c) $(wildcard ps/app/*.h) ps/scripts/create_app_vitis.py Makefile | regs-check
 	$(PYTHON) make_helpers.py mkdir build/vitis

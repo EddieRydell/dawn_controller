@@ -29,7 +29,7 @@
 #endif
 
 #define PL_CONTROL_OFFSET(reg) ((uint32_t)offsetof(pl_control_t, reg))
-#define PL_INGEST_BANK_WAIT_TRIES 30u
+#define PL_INGEST_BANK_WAIT_TRIES 200u
 #define PL_INGEST_BANK_WAIT_US 100u
 #if DAWN_PL_PIN_OUTPUT_COUNT >= 32u
 #define PL_INGEST_PIN_MASK 0xffffffffu

@@ -9,6 +9,7 @@ static uint32_t g_write_bank;
 static uint32_t g_active_output_count;
 static uint32_t g_strand_pixel_count[DAWN_OUTPUT_COUNT];
 static uint32_t g_output_base_word[DAWN_OUTPUT_COUNT];
+static uint32_t g_linear_pixel_word_index[DAWN_WORDS_PER_FRAME];
 static uint32_t g_required_words;
 static uint32_t g_active_pixel_count;
 
@@ -41,25 +42,13 @@ static void apply_local_config(uint32_t active_count, const uint32_t lengths[DAW
         g_output_base_word[output] = output == 0u ? 0u : (g_output_base_word[output - 1u] + DAWN_PIXELS_PER_OUTPUT);
         g_strand_pixel_count[output] = clamp_u32(lengths[output], DAWN_PIXELS_PER_OUTPUT);
         if (output < g_active_output_count) {
-            g_active_pixel_count += g_strand_pixel_count[output];
+            for (uint32_t pixel = 0u; pixel < g_strand_pixel_count[output]; ++pixel) {
+                g_linear_pixel_word_index[g_active_pixel_count] = g_output_base_word[output] + pixel;
+                g_active_pixel_count++;
+            }
         }
     }
     g_required_words = required_words_for(g_active_output_count, g_strand_pixel_count);
-}
-
-static int compact_pixel_to_word_index(uint32_t linear_pixel, uint32_t *word_index)
-{
-    for (uint32_t output = 0u; output < g_active_output_count; ++output) {
-        uint32_t output_length = g_strand_pixel_count[output];
-
-        if (linear_pixel < output_length) {
-            *word_index = g_output_base_word[output] + linear_pixel;
-            return 0;
-        }
-        linear_pixel -= output_length;
-    }
-
-    return -1;
 }
 
 static void clear_inactive_frame(void)
@@ -125,11 +114,11 @@ uint32_t frame_pipeline_strand_pixel_count(uint32_t output)
 
 void frame_pipeline_clear_all(uint32_t rgb_word)
 {
+    uint32_t *words = frame_pipeline_inactive_words();
+
     rgb_word &= 0x00ffffffu;
-    for (uint32_t bank = 0u; bank < FRAME_BANKS; ++bank) {
-        for (uint32_t word = 0u; word < DAWN_WORDS_PER_FRAME; ++word) {
-            g_frame_words[bank][word] = rgb_word;
-        }
+    for (uint32_t word = 0u; word < DAWN_WORDS_PER_FRAME; ++word) {
+        words[word] = rgb_word;
     }
 }
 
@@ -144,17 +133,16 @@ int frame_pipeline_write_linear_rgb(uint32_t first_pixel, const uint8_t *rgb_slo
         uint32_t word_index;
         uint32_t word;
 
-        if (compact_pixel_to_word_index(linear_pixel, &word_index) != 0) {
+        if (linear_pixel >= g_active_pixel_count) {
             break;
         }
+        word_index = g_linear_pixel_word_index[linear_pixel];
 
         word = ((uint32_t)rgb_slots[(pixel * 3u) + 0u] << 16)
              | ((uint32_t)rgb_slots[(pixel * 3u) + 1u] << 8)
              | ((uint32_t)rgb_slots[(pixel * 3u) + 2u] << 0);
 
-        for (uint32_t bank = 0u; bank < FRAME_BANKS; ++bank) {
-            g_frame_words[bank][word_index] = word;
-        }
+        frame_pipeline_inactive_words()[word_index] = word;
     }
 
     return 0;

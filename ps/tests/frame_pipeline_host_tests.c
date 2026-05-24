@@ -182,6 +182,23 @@ static int test_sparse_linear_mapping(void)
     return 0;
 }
 
+static int test_writes_only_current_staging_frame(void)
+{
+    uint8_t slots[] = {
+        0x11u, 0x22u, 0x33u,
+    };
+    uint32_t *words;
+
+    reset_state();
+    EXPECT_EQ(frame_pipeline_write_linear_rgb(0u, slots, 1u), 0u);
+    words = frame_pipeline_inactive_words();
+    EXPECT_EQ(words[0], 0x00112233u);
+    EXPECT_EQ(frame_pipeline_commit(), 0u);
+    words = frame_pipeline_inactive_words();
+    EXPECT_EQ(words[0], 0u);
+    return 0;
+}
+
 static int test_shrink_commits_black_frame_before_reconfiguring(void)
 {
     uint32_t lengths[DAWN_OUTPUT_COUNT];
@@ -242,6 +259,7 @@ int main(void)
     const test_case_t tests[] = {
         {"default_config_commits_30_by_50", test_default_config_commits_30_by_50},
         {"sparse_linear_mapping", test_sparse_linear_mapping},
+        {"writes_only_current_staging_frame", test_writes_only_current_staging_frame},
         {"shrink_commits_black_frame_before_reconfiguring", test_shrink_commits_black_frame_before_reconfiguring},
         {"oversized_config_uses_clamped_local_shape", test_oversized_config_uses_clamped_local_shape},
     };

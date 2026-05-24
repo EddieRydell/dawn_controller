@@ -61,21 +61,6 @@ static e131_parse_result_t check_acn_id(const uint8_t *data, uint16_t length, ui
     return E131_PARSE_OK;
 }
 
-static void copy_cid(uint8_t dst[16], const uint8_t *src)
-{
-    for (uint32_t i = 0u; i < 16u; ++i) {
-        dst[i] = src[i];
-    }
-}
-
-static void copy_source_name(char dst[65], const uint8_t *src)
-{
-    for (uint32_t i = 0u; i < 64u; ++i) {
-        dst[i] = (char)src[i];
-    }
-    dst[64] = '\0';
-}
-
 e131_parse_result_t e131_parse_data_packet(const uint8_t *data,
                                            uint16_t length,
                                            uint16_t first_universe,
@@ -134,8 +119,7 @@ e131_parse_result_t e131_parse_data_packet(const uint8_t *data,
         return E131_PARSE_PROP_COUNT;
     }
 
-    copy_cid(packet->cid, &data[22]);
-    copy_source_name(packet->source_name, &data[44]);
+    packet->cid = &data[22];
     packet->priority = data[108];
     packet->sync_address = read_be16(&data[109]);
     packet->universe = universe;
@@ -173,7 +157,7 @@ e131_parse_result_t e131_parse_sync_packet(const uint8_t *data,
         return E131_PARSE_SYNC_VECTOR;
     }
 
-    copy_cid(packet->cid, &data[22]);
+    packet->cid = &data[22];
     packet->sequence = data[44];
     packet->sync_address = read_be16(&data[45]);
     return E131_PARSE_OK;
