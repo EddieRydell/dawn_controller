@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 
 module ws281x_frame_consumer #(
-    parameter FRAME_WORDS = pl_config_pkg::FRAME_WORDS,
-    parameter FRAME_ADDR_WIDTH = pl_config_pkg::FRAME_ADDR_WIDTH,
-    parameter OUTPUT_COUNT = pl_config_pkg::OUTPUT_COUNT,
-    parameter PIXELS_PER_OUTPUT = pl_config_pkg::PIXELS_PER_OUTPUT,
+    parameter FRAME_WORDS = dawn_pl_contract_pkg::FRAME_WORDS,
+    parameter FRAME_ADDR_WIDTH = dawn_pl_contract_pkg::FRAME_ADDR_WIDTH,
+    parameter OUTPUT_COUNT = dawn_pl_contract_pkg::OUTPUT_COUNT,
+    parameter PIXELS_PER_OUTPUT = dawn_pl_contract_pkg::PIXELS_PER_OUTPUT,
     parameter CLK_HZ = 100000000,
-    parameter WS281X_BIT_RATE = pl_config_pkg::WS281X_BIT_RATE
+    parameter WS281X_BIT_RATE = dawn_pl_contract_pkg::WS281X_BIT_RATE
 ) (
     input  wire                       aclk,
     input  wire                       aresetn,
@@ -40,7 +40,7 @@ module ws281x_frame_consumer #(
     output wire                       m_frame_rready
 );
 
-    localparam [31:0] FRAME_WORDS_PER_BANK = FRAME_WORDS / 2;
+    localparam [31:0] FRAME_WORDS_PER_BANK = dawn_pl_contract_pkg::FRAME_WORDS_PER_BANK;
     localparam integer WS_BIT_CYCLES = CLK_HZ / WS281X_BIT_RATE;
     localparam integer WS_T0H_CYCLES = 35;
     localparam integer WS_T1H_CYCLES = 70;

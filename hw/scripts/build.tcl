@@ -17,7 +17,7 @@ if {[llength [get_board_parts -quiet $pynq_z2_board_part]] > 0} {
 }
 
 add_files -fileset sources_1 [list \
-  [file join $repo_root hw rtl generated pl_config_pkg.sv] \
+  [file join $repo_root hw rtl generated dawn_pl_contract_pkg.sv] \
   [file join $repo_root hw rtl generated pl_control_regs_pkg.sv] \
   [file join $repo_root hw rtl generated pl_control_regs.sv] \
   [file join $repo_root hw rtl pl_frame_control.sv] \

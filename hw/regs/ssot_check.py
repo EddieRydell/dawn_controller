@@ -52,7 +52,7 @@ RDL_DEFINE_RE = re.compile(r"`define\s+([A-Z0-9_]+)\s+(.+)$")
 C_DEFINE_RE = re.compile(r"#\s*define\s+DAWN_PL_([A-Z0-9_]+)\s+((?:0x[0-9a-fA-F]+|\d+)(?:u|U)?)\b")
 PY_ASSIGN_RE = re.compile(r"^([A-Z][A-Z0-9_]*)\s*=\s*(0x[0-9a-fA-F]+|\d+)\b")
 TCL_SET_RE = re.compile(r"^set\s+dawn_pl_([a-z0-9_]+)\s+(0x[0-9a-fA-F]+|\d+)\b")
-SOURCED_FROM_GENERATED_RE = re.compile(r"\b(?:DAWN_PL_[A-Z0-9_]+|pl_config\.[A-Z0-9_]+|pl_config_pkg::[A-Z0-9_]+|\$dawn_pl_[a-z0-9_]+)\b")
+SOURCED_FROM_GENERATED_RE = re.compile(r"\b(?:DAWN_PL_[A-Z0-9_]+|pl_config\.[A-Z0-9_]+|dawn_pl_contract_pkg::[A-Z0-9_]+|\$dawn_pl_[a-z0-9_]+)\b")
 SUSPICIOUS_DEFAULT_RE = re.compile(
     r"(?:env_int\([^,\n]+,\s*(?:0x[0-9a-fA-F]+|\d+)|"
     r"add_argument\(\"--(?:source-ip|dest-ip|port|first-universe|outputs|pixels-per-output|baud)\"[^\n]*default=(?:\"[^\"]+\"|0x[0-9a-fA-F]+|\d+)|"

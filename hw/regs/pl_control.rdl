@@ -139,13 +139,13 @@ addrmap pl_control #(
 
     reg {
         name = "FRAME_CAPACITY";
-        desc = "PL frame storage capacity in 32-bit words.";
+        desc = "PL frame storage capacity in 32-bit words. The frame store is intentionally fixed at two banks.";
         field { sw = r; hw = w; reset = P_OUTPUT_COUNT * P_PIXELS_PER_OUTPUT * P_FRAME_BANKS; } value[31:0];
     } FRAME_CAPACITY @ 12'h018;
 
     reg {
         name = "FRAME_COMMIT";
-        desc = "Atomic frame commit. Bit 31 selects bank; bits 30:0 are word count.";
+        desc = "Atomic frame commit. Bit 31 selects one of the fixed two frame banks; bits 30:0 are word count.";
         field { sw = w; hw = r; reset = 31'h0; swmod = true; } word_count[30:0];
         field { sw = w; hw = r; reset = 1'b0; swmod = true; } bank[31:31];
     } FRAME_COMMIT @ 12'h020;
@@ -182,7 +182,7 @@ addrmap pl_control #(
 
     reg {
         name = "FRAME_BANK_WORDS";
-        desc = "Words per frame bank.";
+        desc = "Words per frame bank. The runtime contract always has two banks.";
         field { sw = r; hw = w; reset = P_OUTPUT_COUNT * P_PIXELS_PER_OUTPUT; } value[31:0];
     } FRAME_BANK_WORDS @ 12'h038;
 

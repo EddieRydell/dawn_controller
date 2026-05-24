@@ -2,9 +2,7 @@
 
 #include "pl_ingest.h"
 
-#define FRAME_BANKS 2u
-
-static uint32_t g_frame_words[FRAME_BANKS][DAWN_WORDS_PER_FRAME];
+static uint32_t g_frame_words[DAWN_PL_FRAME_BANKS][DAWN_WORDS_PER_FRAME];
 static uint32_t g_write_bank;
 static uint32_t g_active_output_count;
 static uint32_t g_strand_pixel_count[DAWN_OUTPUT_COUNT];
@@ -65,7 +63,7 @@ int frame_pipeline_init(void)
     pl_ingest_config_t config;
 
     g_write_bank = 0u;
-    for (uint32_t bank = 0u; bank < FRAME_BANKS; ++bank) {
+    for (uint32_t bank = 0u; bank < DAWN_PL_FRAME_BANKS; ++bank) {
         for (uint32_t word = 0u; word < DAWN_WORDS_PER_FRAME; ++word) {
             g_frame_words[bank][word] = 0u;
         }

@@ -325,7 +325,7 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
     bank_words = before.bank_words;
     write_bank = before.write_bank;
     bank_offset = (size_t)write_bank * (size_t)bank_words;
-    if (write_bank > 1u || word_count > bank_words || word_count > PL_CONTROL__FRAME_COMMIT__WORD_COUNT_bm) {
+    if (write_bank >= DAWN_PL_FRAME_BANKS || word_count > bank_words || word_count > PL_CONTROL__FRAME_COMMIT__WORD_COUNT_bm) {
         return PL_INGEST_CAPACITY_TOO_SMALL;
     }
 
@@ -413,7 +413,7 @@ pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
     bank_words = before.bank_words;
     write_bank = before.write_bank;
     bank_offset = (size_t)write_bank * (size_t)bank_words;
-    if (write_bank > 1u || required_words > bank_words || required_words > PL_CONTROL__FRAME_COMMIT__WORD_COUNT_bm) {
+    if (write_bank >= DAWN_PL_FRAME_BANKS || required_words > bank_words || required_words > PL_CONTROL__FRAME_COMMIT__WORD_COUNT_bm) {
         return PL_INGEST_CAPACITY_TOO_SMALL;
     }
 

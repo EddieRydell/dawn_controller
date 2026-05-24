@@ -18,7 +18,7 @@ PS_HEADER = REPO_ROOT / "ps" / "app" / "pl_control.h"
 PS_CONFIG_HEADER = REPO_ROOT / "ps" / "app" / "generated" / "pl_config.h"
 PY_CONFIG = REPO_ROOT / "ps" / "tools" / "generated" / "pl_config.py"
 RTL_DIR = REPO_ROOT / "hw" / "rtl" / "generated"
-RTL_CONFIG = RTL_DIR / "pl_config_pkg.sv"
+RTL_CONFIG = RTL_DIR / "dawn_pl_contract_pkg.sv"
 TCL_CONFIG = REPO_ROOT / "hw" / "scripts" / "generated" / "pl_config.tcl"
 DOCS_DIR = REPO_ROOT / "build" / "docs" / "regs" / "pl_control"
 PL_CONTROL_TOP = "pl_control"
@@ -238,7 +238,7 @@ def write_if_changed(path, text):
 
 def emit_config_artifacts(out_root, config, regs):
     ps_config = out_root / "ps" / "app" / "generated" / "pl_config.h"
-    rtl_config = out_root / "hw" / "rtl" / "generated" / "pl_config_pkg.sv"
+    rtl_config = out_root / "hw" / "rtl" / "generated" / "dawn_pl_contract_pkg.sv"
     tcl_config = out_root / "hw" / "scripts" / "generated" / "pl_config.tcl"
     py_config = out_root / "ps" / "tools" / "generated" / "pl_config.py"
 
@@ -255,7 +255,7 @@ def emit_config_artifacts(out_root, config, regs):
 
     sv_lines = [
         "`timescale 1ns / 1ps",
-        "package pl_config_pkg;",
+        "package dawn_pl_contract_pkg;",
     ]
     for name, value in config.items():
         sv_lines.append(f"    localparam int {name} = {value};")
