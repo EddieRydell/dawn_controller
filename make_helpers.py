@@ -10,6 +10,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from ps.tools.generated import pl_config
+
 
 ROOT_SIDE_EFFECTS = (".Xil", "NA", "dfx_runtime.txt")
 ROOT_CLEAN_PATTERNS = (
@@ -299,7 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     logs_parser = subparsers.add_parser("logs", help="stream serial telemetry")
     logs_parser.add_argument("--port", default="")
-    logs_parser.add_argument("--baud", type=int, default=115200)
+    logs_parser.add_argument("--baud", type=int, default=pl_config.UART_BAUD)
     logs_parser.set_defaults(func=logs)
 
     list_parser = subparsers.add_parser("list-serial-ports", help="list detected serial ports")

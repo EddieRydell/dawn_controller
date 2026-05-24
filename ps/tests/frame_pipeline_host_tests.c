@@ -43,8 +43,22 @@ const pl_ingest_write_stats_t *pl_ingest_write_stats(void)
 
 pl_ingest_result_t pl_ingest_get_config(pl_ingest_config_t *config)
 {
-    (void)config;
-    return PL_INGEST_BAD_STATUS;
+    config->max_output_count = DAWN_OUTPUT_COUNT;
+    config->max_pixels_per_output = DAWN_PIXELS_PER_OUTPUT;
+    config->active_output_count = DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT;
+    config->effective_active_output_count = DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT;
+    config->required_words = 0u;
+    config->config_status = 0u;
+    for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
+        uint32_t length = output < DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT ? DAWN_DEFAULT_STRAND_PIXEL_COUNT : 0u;
+        config->strand_pixel_count[output] = length;
+        config->effective_strand_pixel_count[output] = length;
+    }
+    for (uint32_t word = 0u; word < DAWN_PL_MASK_WORD_COUNT; ++word) {
+        config->strand_length_clamped[word] = 0u;
+        config->output_invert_mask[word] = DAWN_OUTPUT_INVERT_MASK;
+    }
+    return PL_INGEST_OK;
 }
 
 pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
@@ -111,7 +125,7 @@ static int fail_eq(int line, const char *a, uint32_t av, const char *b, uint32_t
     return 1;
 }
 
-static void reset_state(void)
+static int reset_state(void)
 {
     g_write_frame_calls = 0u;
     g_configure_calls = 0u;
@@ -123,7 +137,8 @@ static void reset_state(void)
     g_last_configure_active_count = 0u;
     memset(g_last_frame_lengths, 0, sizeof(g_last_frame_lengths));
     memset(g_last_configure_lengths, 0, sizeof(g_last_configure_lengths));
-    frame_pipeline_init();
+    EXPECT_EQ(frame_pipeline_init(), 0u);
+    return 0;
 }
 
 static void default_lengths(uint32_t lengths[DAWN_OUTPUT_COUNT])
@@ -135,22 +150,18 @@ static void default_lengths(uint32_t lengths[DAWN_OUTPUT_COUNT])
 
 static int test_default_config_commits_30_by_50(void)
 {
-    reset_state();
-    EXPECT_EQ(DAWN_OUTPUT_COUNT, 30u);
-    EXPECT_EQ(DAWN_PIN_OUTPUT_COUNT, 30u);
-    EXPECT_EQ(DAWN_PIXELS_PER_OUTPUT, 1024u);
-    EXPECT_EQ(DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT, 30u);
-    EXPECT_EQ(DAWN_DEFAULT_STRAND_PIXEL_COUNT, 50u);
-    EXPECT_EQ(DAWN_OUTPUT_INVERT_MASK, 0x3fffffffu);
-    EXPECT_EQ(frame_pipeline_active_pixel_count(), 1500u);
+    if (reset_state() != 0) return 1;
+    EXPECT_EQ(DAWN_OUTPUT_COUNT, DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT);
+    EXPECT_EQ(DAWN_PIN_OUTPUT_COUNT, DAWN_OUTPUT_COUNT);
+    EXPECT_EQ(frame_pipeline_active_pixel_count(), DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT * DAWN_DEFAULT_STRAND_PIXEL_COUNT);
 
     EXPECT_EQ(frame_pipeline_commit(), 0u);
     EXPECT_EQ(g_write_frame_calls, 1u);
-    EXPECT_EQ(g_last_frame_active_count, 30u);
-    EXPECT_EQ(g_last_frame_pixels_per_output, 1024u);
-    EXPECT_EQ(g_last_frame_required_words, 29746u);
-    EXPECT_EQ(g_last_frame_lengths[0], 50u);
-    EXPECT_EQ(g_last_frame_lengths[29], 50u);
+    EXPECT_EQ(g_last_frame_active_count, DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT);
+    EXPECT_EQ(g_last_frame_pixels_per_output, DAWN_PIXELS_PER_OUTPUT);
+    EXPECT_EQ(g_last_frame_required_words, ((DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT - 1u) * DAWN_PIXELS_PER_OUTPUT) + DAWN_DEFAULT_STRAND_PIXEL_COUNT);
+    EXPECT_EQ(g_last_frame_lengths[0], DAWN_DEFAULT_STRAND_PIXEL_COUNT);
+    EXPECT_EQ(g_last_frame_lengths[DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT - 1u], DAWN_DEFAULT_STRAND_PIXEL_COUNT);
     return 0;
 }
 
@@ -165,7 +176,7 @@ static int test_sparse_linear_mapping(void)
     };
     uint32_t *words;
 
-    reset_state();
+    if (reset_state() != 0) return 1;
     lengths[0] = 1u;
     lengths[1] = 2u;
     lengths[3] = 1u;
@@ -174,9 +185,9 @@ static int test_sparse_linear_mapping(void)
     EXPECT_EQ(frame_pipeline_write_linear_rgb(0u, slots, 4u), 0u);
     words = frame_pipeline_inactive_words();
     EXPECT_EQ(words[0], 0x00010203u);
-    EXPECT_EQ(words[1024], 0x00040506u);
-    EXPECT_EQ(words[1025], 0x00070809u);
-    EXPECT_EQ(words[3072], 0x000a0b0cu);
+    EXPECT_EQ(words[DAWN_PIXELS_PER_OUTPUT], 0x00040506u);
+    EXPECT_EQ(words[DAWN_PIXELS_PER_OUTPUT + 1u], 0x00070809u);
+    EXPECT_EQ(words[3u * DAWN_PIXELS_PER_OUTPUT], 0x000a0b0cu);
     EXPECT_EQ(frame_pipeline_commit(), 0u);
     EXPECT_EQ(g_last_frame_required_words, 3073u);
     return 0;
@@ -189,7 +200,7 @@ static int test_writes_only_current_staging_frame(void)
     };
     uint32_t *words;
 
-    reset_state();
+    if (reset_state() != 0) return 1;
     EXPECT_EQ(frame_pipeline_write_linear_rgb(0u, slots, 1u), 0u);
     words = frame_pipeline_inactive_words();
     EXPECT_EQ(words[0], 0x00112233u);
@@ -203,7 +214,7 @@ static int test_shrink_commits_black_frame_before_reconfiguring(void)
 {
     uint32_t lengths[DAWN_OUTPUT_COUNT];
 
-    reset_state();
+    if (reset_state() != 0) return 1;
     default_lengths(lengths);
     EXPECT_EQ(frame_pipeline_configure(30u, lengths), 0u);
     frame_pipeline_clear_all(0x00123456u);
@@ -213,8 +224,8 @@ static int test_shrink_commits_black_frame_before_reconfiguring(void)
     lengths[1] = 5u;
     EXPECT_EQ(frame_pipeline_configure(2u, lengths), 0u);
     EXPECT_EQ(g_write_frame_calls, 1u);
-    EXPECT_EQ(g_last_frame_active_count, 30u);
-    EXPECT_EQ(g_last_frame_required_words, 29746u);
+    EXPECT_EQ(g_last_frame_active_count, DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT);
+    EXPECT_EQ(g_last_frame_required_words, ((DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT - 1u) * DAWN_PIXELS_PER_OUTPUT) + DAWN_DEFAULT_STRAND_PIXEL_COUNT);
     EXPECT_EQ(g_last_frame_first_word, 0u);
     EXPECT_EQ(g_last_frame_last_word, 0u);
     EXPECT_EQ(g_configure_calls, 2u);
@@ -231,7 +242,7 @@ static int test_oversized_config_uses_clamped_local_shape(void)
 {
     uint32_t lengths[DAWN_OUTPUT_COUNT];
 
-    reset_state();
+    if (reset_state() != 0) return 1;
     for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
         lengths[output] = DAWN_PIXELS_PER_OUTPUT + 99u;
     }

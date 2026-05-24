@@ -3,8 +3,10 @@
 
 #include <stdint.h>
 
-#define RX_PACKET_RING_DEPTH 1024u
-#define RX_PACKET_RING_PAYLOAD_BYTES 638u
+#include "generated/pl_config.h"
+
+#define RX_PACKET_RING_DEPTH DAWN_PL_RX_PACKET_RING_DEPTH
+#define RX_PACKET_RING_PAYLOAD_BYTES DAWN_PL_E131_MAX_PACKET_BYTES
 
 typedef struct {
     uint8_t payload[RX_PACKET_RING_PAYLOAD_BYTES];

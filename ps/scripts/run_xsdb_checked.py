@@ -56,6 +56,10 @@ def main() -> int:
         return 2
 
     repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from ps.tools.generated import pl_config
+
     xsdb_script = Path(sys.argv[1])
     if not xsdb_script.is_absolute():
         xsdb_script = repo_root / xsdb_script
@@ -79,13 +83,13 @@ def main() -> int:
     if hw_server is not None:
         hw_log = hw_log_path.open("w")
         hw_process = subprocess.Popen(
-            [hw_server, "-sTCP::3121", "-I60"],
+            [hw_server, f"-sTCP::{pl_config.JTAG_HW_SERVER_PORT}", "-I60"],
             stdout=hw_log,
             stderr=subprocess.STDOUT,
             cwd=log_dir,
         )
-        if not wait_for_port("localhost", 3121, 10):
-            print("ERROR: hw_server did not open TCP port 3121", file=sys.stderr)
+        if not wait_for_port("localhost", pl_config.JTAG_HW_SERVER_PORT, 10):
+            print(f"ERROR: hw_server did not open TCP port {pl_config.JTAG_HW_SERVER_PORT}", file=sys.stderr)
             return 1
 
     saw_error = False

@@ -5,7 +5,7 @@
 
 #include "app_config.h"
 
-void frame_pipeline_init(void);
+int frame_pipeline_init(void);
 uint32_t *frame_pipeline_inactive_words(void);
 uint32_t frame_pipeline_active_output_count(void);
 uint32_t frame_pipeline_active_pixel_count(void);

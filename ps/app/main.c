@@ -47,7 +47,9 @@ int main(void)
         fatal("pl_output_invert", -1);
     }
 
-    frame_pipeline_init();
+    if (frame_pipeline_init() != 0) {
+        fatal("frame_pipeline_config", -1);
+    }
     uint32_t expected_universes = ((frame_pipeline_active_pixel_count() * 3u) + DAWN_SLOTS_PER_UNIVERSE - 1u) / DAWN_SLOTS_PER_UNIVERSE;
     xil_printf("strand_config active_outputs=%u first_lengths=[%u,%u,%u,%u] total_pixels=%u e131_channels=%u expected_universes=%u required_commit_words=%u\r\n",
                (unsigned int)frame_pipeline_active_output_count(),

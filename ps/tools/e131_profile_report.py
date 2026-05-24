@@ -10,6 +10,10 @@ import sys
 import time
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from ps.tools.generated import pl_config
 
 
 def run_logged(command: list[str], log_path: Path, env: dict[str, str] | None = None) -> None:
@@ -103,7 +107,7 @@ def write_report(
             f.write(
                 "Best observed stable end-to-end ingress: "
                 f"`{as_float(best, 'packet_rate'):.2f} packets/sec` "
-                f"at `{best.get('outputs', '30')}x{best.get('pixels_per_output')} @ {best.get('target_fps')} FPS`.\n\n"
+                f"at `{best.get('outputs', str(pl_config.DEFAULT_ACTIVE_OUTPUT_COUNT))}x{best.get('pixels_per_output')} @ {best.get('target_fps')} FPS`.\n\n"
             )
         f.write(
             "Pass criteria: committed FPS at least 99% of target with zero pbuf allocation failures, "
@@ -123,7 +127,7 @@ def write_report(
             if row.get("classification") == "unsupported":
                 f.write(f"| {row.get('candidate')} | build |  |  | unsupported |  |  |  |  |\n")
                 continue
-            cell = f"{row.get('outputs', '30')}x{row.get('pixels_per_output')} @ {row.get('target_fps')}"
+            cell = f"{row.get('outputs', str(pl_config.DEFAULT_ACTIVE_OUTPUT_COUNT))}x{row.get('pixels_per_output')} @ {row.get('target_fps')}"
             f.write(
                 f"| {row.get('candidate', '')} | {cell} | {as_float(row, 'committed_fps'):.2f} | "
                 f"{as_float(row, 'packet_rate'):.2f} | {row.get('classification', '')} | "
@@ -137,7 +141,7 @@ def write_report(
         f.write("| cell | committed FPS | packet rate | class | pbuf | seq | PL drops |\n")
         f.write("| --- | ---: | ---: | --- | ---: | ---: | ---: |\n")
         for row in ceiling_rows:
-            cell = f"{row.get('outputs', '30')}x{row.get('pixels_per_output')} @ {row.get('target_fps')}"
+            cell = f"{row.get('outputs', str(pl_config.DEFAULT_ACTIVE_OUTPUT_COUNT))}x{row.get('pixels_per_output')} @ {row.get('target_fps')}"
             f.write(
                 f"| {cell} | {as_float(row, 'committed_fps'):.2f} | "
                 f"{as_float(row, 'packet_rate'):.2f} | {row.get('classification', '')} | "
@@ -167,7 +171,7 @@ def write_report(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run E1.31 checks/profile and write a root-level Markdown report.")
     parser.add_argument("--serial-port", default="")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, default=pl_config.UART_BAUD)
     parser.add_argument("--duration", type=float, default=10.0)
     parser.add_argument("--report", default="E131_PROFILE_RESULTS.md")
     parser.add_argument("--ceiling-rates", type=float, nargs="*", default=[61.0, 62.0, 63.0, 64.0, 65.0])

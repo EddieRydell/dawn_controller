@@ -9,10 +9,12 @@ VITIS ?= vitis
 BOOTGEN ?= bootgen
 HOST_CC ?= gcc
 PORT ?=
-BAUD ?= 115200
+BAUD ?= $(shell $(PYTHON) -c "from ps.tools.generated import pl_config; print(pl_config.UART_BAUD)")
 SERIAL_PORT ?=
 E131_PROFILE_DURATION ?= 10
 E131_PROFILE_REPORT ?= E131_PROFILE_RESULTS.md
+E131_DEST_IP ?= $(shell $(PYTHON) -c "from ps.tools.generated import pl_config; print(pl_config.BOARD_IP_STRING)")
+E131_PORT ?= $(shell $(PYTHON) -c "from ps.tools.generated import pl_config; print(pl_config.E131_PORT)")
 
 XSA := build/vivado/dawn_controller.xsa
 BITSTREAM := build/vivado/dawn_controller.runs/impl_1/dawn_system_wrapper.bit
@@ -29,23 +31,25 @@ define collect_root_side_effects
 	$(PYTHON) make_helpers.py collect-root-side-effects $(SIDE_EFFECT_DIR)
 endef
 
-.PHONY: help all regs regs-check rtl-check rtl-sim hw ps ps-host-test boot run logs serial-ports e131-send bench-e131 e131-profile-report clean
+.PHONY: help all regs regs-check ssot-check check rtl-check rtl-sim hw ps ps-host-test boot run logs serial-ports e131-send bench-e131 e131-profile-report clean
 
 help:
 	@echo Common targets:
 	@echo   make hw      Build Vivado hardware and export XSA
 	@echo   make regs    Regenerate SystemRDL-derived software, RTL, and local docs
 	@echo   make regs-check  Check committed register artifacts are fresh
+	@echo   make ssot-check  Check runtime contract literals come from SystemRDL/generated artifacts
+	@echo   make check   Run generated, SSOT, compile, host, RTL checks, and focused RTL sim
 	@echo   make rtl-check  Run fast Vivado Verilog syntax checks
 	@echo   make rtl-sim  Run focused WS281x consumer RTL simulation
 	@echo   make ps      Build the bare-metal controller app
 	@echo   make ps-host-test  Build and run host-side PS protocol tests
 	@echo   make boot    Package deployable SD-card BOOT.BIN
 	@echo   make run     Program FPGA and run the controller app over JTAG
-	@echo   make logs   Stream UART telemetry at BAUD=115200
+	@echo   make logs   Stream UART telemetry at generated default baud
 	@echo   make logs PORT=COMx  Stream UART telemetry from an explicit port
 	@echo   make serial-ports  List detected serial ports
-	@echo   make e131-send  Send deterministic E1.31 UDP to 192.168.7.2:5568
+	@echo   make e131-send  Send deterministic E1.31 UDP to generated board endpoint
 	@echo   make bench-e131  Run the 30-output E1.31 throughput benchmark
 	@echo   make e131-profile-report  Auto-detect UART, run hardware profile, and write E131_PROFILE_RESULTS.md
 	@echo   make all     Run hw, ps, and boot
@@ -60,6 +64,16 @@ regs:
 regs-check:
 	$(PYTHON) hw/regs/generate_regs.py --check
 	$(collect_root_side_effects)
+
+ssot-check:
+	$(PYTHON) hw/regs/ssot_check.py
+	$(collect_root_side_effects)
+
+check: regs-check ssot-check
+	$(PYTHON) -m py_compile ps/tools/e131_send.py ps/tools/e131_benchmark.py ps/tools/e131_ingress_profile.py ps/tools/e131_profile_report.py ps/scripts/create_app_vitis.py ps/scripts/package_boot.py ps/scripts/run_xsdb_checked.py
+	$(MAKE) ps-host-test
+	$(MAKE) rtl-check
+	$(MAKE) rtl-sim
 
 rtl-check: regs-check
 	$(PYTHON) make_helpers.py mkdir $(RTL_CHECK_DIR)
@@ -121,7 +135,7 @@ serial-ports:
 	$(PYTHON) make_helpers.py list-serial-ports
 
 e131-send:
-	$(PYTHON) ps/tools/e131_send.py --dest-ip 192.168.7.2 --port 5568
+	$(PYTHON) ps/tools/e131_send.py --dest-ip $(E131_DEST_IP) --port $(E131_PORT)
 
 bench-e131:
 	$(PYTHON) ps/tools/e131_benchmark.py

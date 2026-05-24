@@ -36,6 +36,41 @@ PARAM_TO_CONFIG = OrderedDict([
     ("P_WS281X_BIT_RATE", "WS281X_BIT_RATE"),
     ("P_FRAME_BANKS", "FRAME_BANKS"),
     ("P_CONTROL_RANGE_BYTES", "CONTROL_RANGE_BYTES"),
+    ("P_E131_PORT", "E131_PORT"),
+    ("P_E131_FIRST_UNIVERSE", "E131_FIRST_UNIVERSE"),
+    ("P_E131_SLOTS_PER_UNIVERSE", "E131_SLOTS_PER_UNIVERSE"),
+    ("P_E131_BLACKOUT_TIMEOUT_MS", "E131_BLACKOUT_TIMEOUT_MS"),
+    ("P_E131_ACCEPT_PREVIEW", "E131_ACCEPT_PREVIEW"),
+    ("P_E131_DEFAULT_SYNC_ADDRESS", "E131_DEFAULT_SYNC_ADDRESS"),
+    ("P_BOARD_IP0", "BOARD_IP0"),
+    ("P_BOARD_IP1", "BOARD_IP1"),
+    ("P_BOARD_IP2", "BOARD_IP2"),
+    ("P_BOARD_IP3", "BOARD_IP3"),
+    ("P_HOST_IP0", "HOST_IP0"),
+    ("P_HOST_IP1", "HOST_IP1"),
+    ("P_HOST_IP2", "HOST_IP2"),
+    ("P_HOST_IP3", "HOST_IP3"),
+    ("P_NETMASK_IP0", "NETMASK_IP0"),
+    ("P_NETMASK_IP1", "NETMASK_IP1"),
+    ("P_NETMASK_IP2", "NETMASK_IP2"),
+    ("P_NETMASK_IP3", "NETMASK_IP3"),
+    ("P_GATEWAY_IP0", "GATEWAY_IP0"),
+    ("P_GATEWAY_IP1", "GATEWAY_IP1"),
+    ("P_GATEWAY_IP2", "GATEWAY_IP2"),
+    ("P_GATEWAY_IP3", "GATEWAY_IP3"),
+    ("P_MAC0", "MAC0"),
+    ("P_MAC1", "MAC1"),
+    ("P_MAC2", "MAC2"),
+    ("P_MAC3", "MAC3"),
+    ("P_MAC4", "MAC4"),
+    ("P_MAC5", "MAC5"),
+    ("P_UART_BAUD", "UART_BAUD"),
+    ("P_JTAG_HW_SERVER_PORT", "JTAG_HW_SERVER_PORT"),
+    ("P_RX_PACKET_RING_DEPTH", "RX_PACKET_RING_DEPTH"),
+    ("P_E131_MAX_PACKET_BYTES", "E131_MAX_PACKET_BYTES"),
+    ("P_LWIP_MEM_SIZE", "LWIP_MEM_SIZE"),
+    ("P_LWIP_PBUF_POOL_SIZE", "LWIP_PBUF_POOL_SIZE"),
+    ("P_LWIP_RX_DESCRIPTORS", "LWIP_RX_DESCRIPTORS"),
 ])
 
 REQUIRED_REGS = [
@@ -94,6 +129,14 @@ def ceil_log2(value):
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
+
+
+def sv_int(value):
+    return f"32'h{int(value) & 0xffffffff:08x}"
+
+
+def c_uint(value):
+    return f"{int(value)}u"
 
 
 def elaborate_system():
@@ -156,11 +199,26 @@ def read_config_and_regs():
             require(len(reg.array_dimensions) == 1, f"{reg.inst_name} must be a one-dimensional array")
             count = int(reg.array_dimensions[0])
             require(reg.array_stride is not None, f"{reg.inst_name} missing array stride")
+        reset = 0
+        fields = OrderedDict()
+        for field in reg.fields():
+            field_mask = ((1 << int(field.width)) - 1) << int(field.low)
+            field_reset = int(field.get_property("reset") or 0) << int(field.low)
+            reset |= field_reset & field_mask
+            fields[field.inst_name] = {
+                "low": int(field.low),
+                "high": int(field.high),
+                "width": int(field.width),
+                "mask": field_mask,
+                "reset": field_reset & field_mask,
+            }
         regs[reg.inst_name] = {
             "offset": offset,
             "count": count,
             "stride": int(reg.array_stride or 0),
             "arrayed": arrayed,
+            "reset": reset,
+            "fields": fields,
         }
 
     missing_regs = [name for name in REQUIRED_REGS if name not in regs]
@@ -191,7 +249,7 @@ def emit_config_artifacts(out_root, config, regs):
         "",
     ]
     for name, value in config.items():
-        c_lines.append(f"#define DAWN_PL_{name} {value}u")
+        c_lines.append(f"#define DAWN_PL_{name} {c_uint(value)}")
     c_lines.extend(["", "#endif", ""])
     write_if_changed(ps_config, "\n".join(c_lines))
 
@@ -201,6 +259,16 @@ def emit_config_artifacts(out_root, config, regs):
     ]
     for name, value in config.items():
         sv_lines.append(f"    localparam int {name} = {value};")
+    sv_lines.append("")
+    for name, metadata in regs.items():
+        sv_lines.append(f"    localparam int unsigned REG_{name}_OFFSET = 32'h{metadata['offset']:08x};")
+        sv_lines.append(f"    localparam logic [31:0] REG_{name}_RESET = {sv_int(metadata['reset'])};")
+        if metadata["arrayed"]:
+            sv_lines.append(f"    localparam int unsigned REG_{name}_COUNT = {metadata['count']};")
+            sv_lines.append(f"    localparam int unsigned REG_{name}_STRIDE = {metadata['stride']};")
+        for field_name, field in metadata["fields"].items():
+            sv_lines.append(f"    localparam logic [31:0] REG_{name}_{field_name}_MASK = {sv_int(field['mask'])};")
+            sv_lines.append(f"    localparam int unsigned REG_{name}_{field_name}_BP = {field['low']};")
     sv_lines.extend(["endpackage", ""])
     write_if_changed(rtl_config, "\n".join(sv_lines))
 
@@ -221,6 +289,24 @@ def emit_config_artifacts(out_root, config, regs):
     py_lines = ["# Generated from hw/regs/pl_control.rdl. Do not edit."]
     for name, value in config.items():
         py_lines.append(f"{name} = {value}")
+    py_lines.extend([
+        "",
+        "BOARD_IP = (BOARD_IP0, BOARD_IP1, BOARD_IP2, BOARD_IP3)",
+        "HOST_IP = (HOST_IP0, HOST_IP1, HOST_IP2, HOST_IP3)",
+        "NETMASK_IP = (NETMASK_IP0, NETMASK_IP1, NETMASK_IP2, NETMASK_IP3)",
+        "GATEWAY_IP = (GATEWAY_IP0, GATEWAY_IP1, GATEWAY_IP2, GATEWAY_IP3)",
+        "MAC = (MAC0, MAC1, MAC2, MAC3, MAC4, MAC5)",
+        "",
+        "",
+        "def ip_string(octets):",
+        "    return \".\".join(str(octet) for octet in octets)",
+        "",
+        "",
+        "BOARD_IP_STRING = ip_string(BOARD_IP)",
+        "HOST_IP_STRING = ip_string(HOST_IP)",
+        "NETMASK_IP_STRING = ip_string(NETMASK_IP)",
+        "GATEWAY_IP_STRING = ip_string(GATEWAY_IP)",
+    ])
     py_lines.append("")
     write_if_changed(py_config, "\n".join(py_lines))
 

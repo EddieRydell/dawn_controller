@@ -85,7 +85,7 @@ static uint32_t pl_ingest_now_us(void)
     ticks = ((uint64_t)high << 32) | low;
     return (uint32_t)((ticks * 1000000u) / COUNTS_PER_SECOND);
 #else
-    return 0u;
+#error "XPAR_GLOBAL_TIMER_BASEADDR is required for PL ingest timing"
 #endif
 }
 

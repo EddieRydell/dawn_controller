@@ -21,6 +21,10 @@
 
 #include <string.h>
 
+#if !(LWIP_STATS && MEMP_STATS)
+#error "lwIP MEMP stats must be enabled for E1.31 ingress telemetry"
+#endif
+
 #if defined(XPAR_XEMACPS_0_BASEADDR)
 #define DAWN_EMAC_BASEADDR XPAR_XEMACPS_0_BASEADDR
 #elif defined(XPAR_PS7_ETHERNET_0_BASEADDR)
@@ -103,24 +107,18 @@ static void copy_receiver_status(void)
 
 static void copy_lwip_pbuf_pool_stats(void)
 {
-#if LWIP_STATS && MEMP_STATS
     if (lwip_stats.memp[MEMP_PBUF_POOL] != NULL) {
         g_counters.rx_pbuf_alloc_failures = lwip_stats.memp[MEMP_PBUF_POOL]->err;
         g_counters.rx_pbuf_pool_used = lwip_stats.memp[MEMP_PBUF_POOL]->used;
         g_counters.rx_pbuf_pool_max = lwip_stats.memp[MEMP_PBUF_POOL]->max;
         g_counters.rx_pbuf_pool_avail = lwip_stats.memp[MEMP_PBUF_POOL]->avail;
     } else {
-        g_counters.rx_pbuf_alloc_failures = 0u;
-        g_counters.rx_pbuf_pool_used = 0u;
-        g_counters.rx_pbuf_pool_max = 0u;
-        g_counters.rx_pbuf_pool_avail = 0u;
+        g_counters.rx_pbuf_alloc_failures = UINT32_MAX;
+        g_counters.rx_pbuf_pool_used = UINT32_MAX;
+        g_counters.rx_pbuf_pool_max = UINT32_MAX;
+        g_counters.rx_pbuf_pool_avail = UINT32_MAX;
+        g_counters.last_error = "pbuf_stats_unavailable";
     }
-#else
-    g_counters.rx_pbuf_alloc_failures = 0u;
-    g_counters.rx_pbuf_pool_used = 0u;
-    g_counters.rx_pbuf_pool_max = 0u;
-    g_counters.rx_pbuf_pool_avail = 0u;
-#endif
 }
 
 static void receive_udp(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port)

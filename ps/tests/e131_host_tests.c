@@ -7,7 +7,7 @@
 #include "../app/e131_receiver.h"
 #include "../app/frame_pipeline.h"
 
-#define MAX_PACKET 638u
+#define MAX_PACKET DAWN_PL_E131_MAX_PACKET_BYTES
 #define HOST_ACTIVE_PIXELS (DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT * DAWN_DEFAULT_STRAND_PIXEL_COUNT)
 #define HOST_UNIVERSE_COUNT ((HOST_ACTIVE_PIXELS * 3u + DAWN_SLOTS_PER_UNIVERSE - 1u) / DAWN_SLOTS_PER_UNIVERSE)
 #define HOST_LAST_UNIVERSE_OFFSET (HOST_UNIVERSE_COUNT - 1u)
@@ -46,8 +46,9 @@ uint32_t frame_pipeline_strand_pixel_count(uint32_t output)
     return DAWN_DEFAULT_STRAND_PIXEL_COUNT;
 }
 
-void frame_pipeline_init(void)
+int frame_pipeline_init(void)
 {
+    return 0;
 }
 
 void frame_pipeline_clear_all(uint32_t rgb_word)
@@ -235,13 +236,13 @@ static int test_parser_metadata(void)
     uint8_t packet[MAX_PACKET];
     uint8_t cid[16] = {0xdeu, 0xadu, 0xbeu, 0xefu};
     e131_data_packet_t parsed;
-    uint16_t len = build_data(packet, 3u, 42u, cid, 150u, 63999u, 0x80u, DAWN_SLOTS_PER_UNIVERSE);
+    uint16_t len = build_data(packet, 3u, 42u, cid, 150u, DAWN_E131_DEFAULT_SYNC_ADDRESS, 0x80u, DAWN_SLOTS_PER_UNIVERSE);
 
     EXPECT_EQ(e131_parse_data_packet(packet, len, DAWN_FIRST_UNIVERSE, DAWN_WORDS_PER_FRAME, &parsed), E131_PARSE_OK);
     EXPECT_TRUE(parsed.cid == &packet[22]);
     EXPECT_EQ(parsed.cid[0], 0xdeu);
     EXPECT_EQ(parsed.priority, 150u);
-    EXPECT_EQ(parsed.sync_address, 63999u);
+    EXPECT_EQ(parsed.sync_address, DAWN_E131_DEFAULT_SYNC_ADDRESS);
     EXPECT_EQ(parsed.sequence, 42u);
     EXPECT_EQ(parsed.options, 0x80u);
     EXPECT_EQ(parsed.universe, 3u);

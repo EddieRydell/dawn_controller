@@ -19,10 +19,15 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import e131_benchmark as bench
+from generated import pl_config
 
 
 CANDIDATES: dict[str, dict[str, int]] = {
-    "current": {"DAWN_LWIP_MEM_SIZE": 262144, "DAWN_LWIP_PBUF_POOL_SIZE": 512, "DAWN_LWIP_RX_DESCRIPTORS": 128},
+    "current": {
+        "DAWN_LWIP_MEM_SIZE": pl_config.LWIP_MEM_SIZE,
+        "DAWN_LWIP_PBUF_POOL_SIZE": pl_config.LWIP_PBUF_POOL_SIZE,
+        "DAWN_LWIP_RX_DESCRIPTORS": pl_config.LWIP_RX_DESCRIPTORS,
+    },
     "pool1024": {"DAWN_LWIP_MEM_SIZE": 524288, "DAWN_LWIP_PBUF_POOL_SIZE": 1024, "DAWN_LWIP_RX_DESCRIPTORS": 256},
     "pool1536": {"DAWN_LWIP_MEM_SIZE": 786432, "DAWN_LWIP_PBUF_POOL_SIZE": 1536, "DAWN_LWIP_RX_DESCRIPTORS": 256},
     "pool2048": {"DAWN_LWIP_MEM_SIZE": 1048576, "DAWN_LWIP_PBUF_POOL_SIZE": 2048, "DAWN_LWIP_RX_DESCRIPTORS": 256},
@@ -99,7 +104,7 @@ def run_cell(
 ) -> dict[str, int | float | str]:
     cell_name = f"{candidate}_{cell_index:02d}_{outputs}x{pixels}_{rate:g}fps"
     total_pixels = outputs * pixels
-    universe_count = math.ceil((total_pixels * 3) / 510)
+    universe_count = math.ceil((total_pixels * 3) / pl_config.E131_SLOTS_PER_UNIVERSE)
     uart_start = len(capture.lines)
     capture.drain_pending()
     print(f"{cell_name}: configure outputs={outputs} pixels={pixels} universes={universe_count}", flush=True)
@@ -200,13 +205,13 @@ def write_outputs(out_dir: Path, rows: list[dict[str, int | float | str]]) -> No
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Profile non-DMA E1.31 ingress across lwIP candidate settings.")
-    parser.add_argument("--source-ip", default="192.168.7.1")
-    parser.add_argument("--dest-ip", default="192.168.7.2")
-    parser.add_argument("--port", type=int, default=5568)
+    parser.add_argument("--source-ip", default=pl_config.HOST_IP_STRING)
+    parser.add_argument("--dest-ip", default=pl_config.BOARD_IP_STRING)
+    parser.add_argument("--port", type=int, default=pl_config.E131_PORT)
     parser.add_argument("--serial-port", default="")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, default=pl_config.UART_BAUD)
     parser.add_argument("--duration", type=float, default=20.0)
-    parser.add_argument("--outputs", type=int, default=30)
+    parser.add_argument("--outputs", type=int, default=pl_config.DEFAULT_ACTIVE_OUTPUT_COUNT)
     parser.add_argument("--candidates", nargs="*", default=list(CANDIDATES.keys()))
     return parser.parse_args()
 

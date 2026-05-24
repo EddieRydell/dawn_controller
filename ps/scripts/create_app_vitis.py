@@ -2,6 +2,7 @@
 from pathlib import Path
 from datetime import datetime
 import os
+import sys
 
 import vitis
 
@@ -18,6 +19,11 @@ def env_int(name, default=None):
 
 
 repo_root = Path(__file__).resolve().parents[2]
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+from ps.tools.generated import pl_config
+
 workspace = repo_root / "build" / "vitis" / datetime.now().strftime("%Y%m%d_%H%M%S")
 xsa = repo_root / "build" / "vivado" / "dawn_controller.xsa"
 
@@ -58,11 +64,11 @@ if not any(lib.get("name") == "lwip220" for lib in standalone_domain.get_libs())
 mark("enable lwip stats")
 standalone_domain.set_config("lib", "lwip220_stats", "true", lib_name="lwip220")
 for env_name, param_name, default_value in (
-    ("DAWN_LWIP_MEM_SIZE", "lwip220_mem_size", 786432),
+    ("DAWN_LWIP_MEM_SIZE", "lwip220_mem_size", pl_config.LWIP_MEM_SIZE),
     ("DAWN_LWIP_MEMP_N_PBUF", "lwip220_memp_n_pbuf", None),
-    ("DAWN_LWIP_PBUF_POOL_SIZE", "lwip220_pbuf_pool_size", 1536),
+    ("DAWN_LWIP_PBUF_POOL_SIZE", "lwip220_pbuf_pool_size", pl_config.LWIP_PBUF_POOL_SIZE),
     ("DAWN_LWIP_PBUF_POOL_BUFSIZE", "lwip220_pbuf_pool_bufsize", None),
-    ("DAWN_LWIP_RX_DESCRIPTORS", "lwip220_n_rx_descriptors", 256),
+    ("DAWN_LWIP_RX_DESCRIPTORS", "lwip220_n_rx_descriptors", pl_config.LWIP_RX_DESCRIPTORS),
     ("DAWN_LWIP_TX_DESCRIPTORS", "lwip220_n_tx_descriptors", None),
     ("DAWN_LWIP_RX_COALESCE", "lwip220_n_rx_coalesce", None),
 ):

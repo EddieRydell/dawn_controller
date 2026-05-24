@@ -60,7 +60,7 @@ static void clear_inactive_frame(void)
     }
 }
 
-void frame_pipeline_init(void)
+int frame_pipeline_init(void)
 {
     pl_ingest_config_t config;
 
@@ -71,17 +71,11 @@ void frame_pipeline_init(void)
         }
     }
 
-    if (pl_ingest_get_config(&config) == PL_INGEST_OK) {
-        apply_local_config(config.effective_active_output_count, config.effective_strand_pixel_count);
-    } else {
-        uint32_t default_lengths[DAWN_OUTPUT_COUNT];
-        for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
-            default_lengths[output] = output < DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT
-                ? DAWN_DEFAULT_STRAND_PIXEL_COUNT
-                : 0u;
-        }
-        apply_local_config(DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT, default_lengths);
+    if (pl_ingest_get_config(&config) != PL_INGEST_OK) {
+        return -1;
     }
+    apply_local_config(config.effective_active_output_count, config.effective_strand_pixel_count);
+    return 0;
 }
 
 uint32_t *frame_pipeline_inactive_words(void)

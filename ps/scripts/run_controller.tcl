@@ -1,6 +1,6 @@
 set repo_root [file normalize [file join [file dirname [info script]] .. ..]]
 source [file join $repo_root hw scripts generated pl_config.tcl]
-set hw_server_url "TCP:localhost:3121"
+set hw_server_url "TCP:localhost:$dawn_pl_jtag_hw_server_port"
 set bit_file [file join $repo_root build vivado dawn_controller.runs impl_1 dawn_system_wrapper.bit]
 set vitis_workspace [file join $repo_root build vitis]
 set pl_control_base $dawn_pl_control_baseaddr

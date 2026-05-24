@@ -69,7 +69,7 @@ bare-metal controller app
 ## Active Files
 
 ```text
-hw/regs/pl_control.rdl       SystemRDL source of truth for PL control registers
+hw/regs/pl_control.rdl       SystemRDL source of truth for PL/register/runtime contract
 hw/rtl/generated/            PeakRDL-generated AXI-Lite control register block
 hw/rtl/pl_frame_control.sv       Reusable PS-to-PL AXI-Lite control and frame commit foundation
 hw/rtl/ws281x_frame_consumer.sv  WS281x frame reader and serializer
@@ -91,25 +91,25 @@ Makefile
 
 | Region | Base | Size | Purpose |
 | --- | --- | --- | --- |
-| Control | `0x43C00000` | 4 KiB | Identity, status, counters, commit |
-| Frame RAM | `0x43C80000` | 256 KiB | 61440 32-bit frame words |
+| Control | `DAWN_PL_CONTROL_BASEADDR` | `DAWN_PL_CONTROL_RANGE_BYTES` | Identity, status, counters, commit |
+| Frame RAM | `DAWN_PL_FRAME_RAM_BASEADDR` | `DAWN_PL_FRAME_RAM_RANGE_BYTES` | `DAWN_PL_FRAME_WORDS` 32-bit frame words |
 
-The control register map is authored in `hw/regs/pl_control.rdl`. Run `make regs` to regenerate the committed PS header and RTL register block, plus local HTML docs under `build/docs/regs/pl_control/index.html`. Run `make regs-check` to fail if committed generated artifacts are stale.
+The control register map and runtime defaults are authored in `hw/regs/pl_control.rdl`. Run `make regs` to regenerate the committed PS header, Python/Tcl config, RTL packages, and local HTML docs under `build/docs/regs/pl_control/index.html`. Run `make regs-check` to fail if committed generated artifacts are stale.
 
-Current frame format is fixed output-major storage for 30 synthesized outputs with 1024 pixels per output. Word `0` is output 0 pixel 0, word `1023` is output 0 pixel 1023, word `1024` is output 1 pixel 0, and so on through output 29. Each word is `0x00RRGGBB`. The frame RAM capacity is `61440` words split into two `30720` word banks. Runtime configuration selects the active output count and per-output lengths within those maxima; boot defaults are 30 active outputs, 50 pixels each, and output invert mask `0x3fffffff`.
+Current frame format is fixed output-major storage. The synthesized dimensions are generated as `DAWN_PL_OUTPUT_COUNT` and `DAWN_PL_PIXELS_PER_OUTPUT`; word 0 is output 0 pixel 0, then pixels continue through each output before moving to the next output. Each word is `0x00RRGGBB`. Frame RAM sizing and bank sizing are generated as `DAWN_PL_FRAME_WORDS`, `DAWN_PL_FRAME_WORDS_PER_BANK`, and `DAWN_PL_FRAME_BANKS`. Runtime configuration selects the active output count and per-output lengths within those maxima; boot defaults are generated as `DAWN_PL_DEFAULT_ACTIVE_OUTPUT_COUNT`, `DAWN_PL_DEFAULT_STRAND_PIXEL_COUNT`, and `DAWN_PL_DEFAULT_OUTPUT_INVERT_MASK`.
 
 ## Ethernet E1.31 Bring-Up
 
 The PS app uses a static direct Ethernet link:
 
 ```text
-Host NIC: 192.168.7.1/24
-Board:    192.168.7.2/24
-Gateway:  0.0.0.0
-UDP port: 5568
+Host NIC: DAWN_PL_HOST_IP*/DAWN_PL_NETMASK_IP*
+Board:    DAWN_PL_BOARD_IP*/DAWN_PL_NETMASK_IP*
+Gateway:  DAWN_PL_GATEWAY_IP*
+UDP port: DAWN_PL_E131_PORT
 ```
 
-Configure the host Ethernet adapter manually to `192.168.7.1` with netmask `255.255.255.0`, connect it directly to the PYNQ-Z2 Ethernet port, then run the app and observe UART logs:
+Configure the host Ethernet adapter manually to the generated `DAWN_PL_HOST_IP*` address with `DAWN_PL_NETMASK_IP*`, connect it directly to the PYNQ-Z2 Ethernet port, then run the app and observe UART logs:
 
 ```sh
 make run
@@ -126,12 +126,12 @@ Send E1.31 from the host:
 
 ```sh
 make e131-send
-python ps/tools/e131_send.py --dest-ip 192.168.7.2 --pattern bars --packet-count 10 --rate 30
+python ps/tools/e131_send.py --dest-ip "$(python -c 'from ps.tools.generated import pl_config; print(pl_config.BOARD_IP_STRING)')" --pattern bars --packet-count 10 --rate 30
 ```
 
 The sender is send-only. UART remains the canonical observer. A successful packet test shows increasing `rx_packets`, `e131_valid`, and `frames_committed`. Malformed packets or packets outside the configured universe range increment `e131_rejected` and do not commit a frame.
 
-For the 30-output throughput benchmark, configure the host NIC as `192.168.7.1/24`, keep the board at `192.168.7.2`, use UDP `5568`, and keep UART at `115200` baud:
+For the throughput benchmark, configure the host NIC, board address, UDP port, and UART baud from the generated `ps/tools/generated/pl_config.py` values:
 
 ```sh
 make bench-e131
@@ -140,7 +140,7 @@ python ps/tools/e131_benchmark.py --skip-build --sanity-only
 python ps/tools/e131_benchmark.py --skip-build --pixels 300 --rates 60
 ```
 
-`make bench-e131` runs `python ps/tools/e131_benchmark.py`. Use `--skip-build` when the app is already built, `--sanity-only` for the first `30x50 @ 30 FPS` gate, `--duration` to change each send duration, and `--pixels` / `--rates` to select cells. The practical gate for the current throughput work is:
+`make bench-e131` runs `python ps/tools/e131_benchmark.py`. Use `--skip-build` when the app is already built, `--sanity-only` for the first generated-default active-output/pixel-count gate at 30 FPS, `--duration` to change each send duration, and `--pixels` / `--rates` to select cells. The practical gate for the current throughput work is:
 
 ```sh
 python ps/tools/e131_benchmark.py --skip-build --pixels 300 --rates 60
@@ -157,7 +157,7 @@ The current benchmark matrix is:
 | 750 | 20, 30, 40, 50 |
 | 1024 | 20, 25, 30, 35, 40 |
 
-The benchmark writes per-run artifacts under `build/bench/<timestamp>/`: `results.csv`, `summary.md`, `uart.log`, per-cell sender logs, JTAG run logs, and JTAG snapshots. It programs the FPGA/app for each pixels-per-output setting after writing runtime strand registers over JTAG, then sends timed E1.31 sweeps from `192.168.7.1`.
+The benchmark writes per-run artifacts under `build/bench/<timestamp>/`: `results.csv`, `summary.md`, `uart.log`, per-cell sender logs, JTAG run logs, and JTAG snapshots. It programs the FPGA/app for each pixels-per-output setting after writing runtime strand registers over JTAG, then sends timed E1.31 sweeps from the generated host endpoint.
 
 Stop throughput investigation if any cell at or below `60 FPS` reports pbuf allocation failures, RX ring drops, sequence anomalies, PL/consumer errors, or committed FPS below 99% of target.
 
@@ -167,7 +167,7 @@ For the non-DMA ingress profile, run:
 python ps/tools/e131_ingress_profile.py --duration 20
 ```
 
-The profile rebuilds `make ps` for each explicit lwIP candidate, records unsupported Vitis settings instead of substituting values, runs `30x50 @ 30 FPS` once as a guard, then runs `30x300 @ 60 FPS`, `30x500 @ 60 FPS`, and `30x1024 @ 30 FPS` per candidate. Artifacts are written under `build/bench/<timestamp>-ingress-profile/`.
+The profile rebuilds `make ps` for each explicit lwIP candidate, records unsupported Vitis settings instead of substituting values, runs the generated-default active-output/pixel-count guard at 30 FPS once, then runs the local scenario cells listed in `ps/tools/e131_ingress_profile.py` per candidate. Artifacts are written under `build/bench/<timestamp>-ingress-profile/`.
 
 To run the full repeatable profile bundle and write a root-level Markdown report:
 

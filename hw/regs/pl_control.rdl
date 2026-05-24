@@ -12,6 +12,41 @@
 `define FRAME_WORDS_PER_BANK (`OUTPUT_COUNT * `PIXELS_PER_OUTPUT)
 `define FRAME_WORDS (`FRAME_BANKS * `FRAME_WORDS_PER_BANK)
 `define FRAME_RAM_RANGE_BYTES 262144
+`define E131_PORT 5568
+`define E131_FIRST_UNIVERSE 1
+`define E131_SLOTS_PER_UNIVERSE 510
+`define E131_BLACKOUT_TIMEOUT_MS 5000
+`define E131_ACCEPT_PREVIEW 0
+`define E131_DEFAULT_SYNC_ADDRESS 63999
+`define BOARD_IP0 192
+`define BOARD_IP1 168
+`define BOARD_IP2 7
+`define BOARD_IP3 2
+`define HOST_IP0 192
+`define HOST_IP1 168
+`define HOST_IP2 7
+`define HOST_IP3 1
+`define NETMASK_IP0 255
+`define NETMASK_IP1 255
+`define NETMASK_IP2 255
+`define NETMASK_IP3 0
+`define GATEWAY_IP0 0
+`define GATEWAY_IP1 0
+`define GATEWAY_IP2 0
+`define GATEWAY_IP3 0
+`define MAC0 2
+`define MAC1 10
+`define MAC2 53
+`define MAC3 7
+`define MAC4 0
+`define MAC5 2
+`define UART_BAUD 115200
+`define JTAG_HW_SERVER_PORT 3121
+`define RX_PACKET_RING_DEPTH 1024
+`define E131_MAX_PACKET_BYTES 638
+`define LWIP_MEM_SIZE 786432
+`define LWIP_PBUF_POOL_SIZE 1536
+`define LWIP_RX_DESCRIPTORS 256
 
 addrmap pl_control #(
     longint unsigned P_OUTPUT_COUNT = `OUTPUT_COUNT,
@@ -22,7 +57,42 @@ addrmap pl_control #(
     longint unsigned P_DEFAULT_OUTPUT_INVERT_MASK = `DEFAULT_OUTPUT_INVERT_MASK,
     longint unsigned P_WS281X_BIT_RATE = `WS281X_BIT_RATE,
     longint unsigned P_FRAME_BANKS = `FRAME_BANKS,
-    longint unsigned P_CONTROL_RANGE_BYTES = `CONTROL_RANGE_BYTES
+    longint unsigned P_CONTROL_RANGE_BYTES = `CONTROL_RANGE_BYTES,
+    longint unsigned P_E131_PORT = `E131_PORT,
+    longint unsigned P_E131_FIRST_UNIVERSE = `E131_FIRST_UNIVERSE,
+    longint unsigned P_E131_SLOTS_PER_UNIVERSE = `E131_SLOTS_PER_UNIVERSE,
+    longint unsigned P_E131_BLACKOUT_TIMEOUT_MS = `E131_BLACKOUT_TIMEOUT_MS,
+    longint unsigned P_E131_ACCEPT_PREVIEW = `E131_ACCEPT_PREVIEW,
+    longint unsigned P_E131_DEFAULT_SYNC_ADDRESS = `E131_DEFAULT_SYNC_ADDRESS,
+    longint unsigned P_BOARD_IP0 = `BOARD_IP0,
+    longint unsigned P_BOARD_IP1 = `BOARD_IP1,
+    longint unsigned P_BOARD_IP2 = `BOARD_IP2,
+    longint unsigned P_BOARD_IP3 = `BOARD_IP3,
+    longint unsigned P_HOST_IP0 = `HOST_IP0,
+    longint unsigned P_HOST_IP1 = `HOST_IP1,
+    longint unsigned P_HOST_IP2 = `HOST_IP2,
+    longint unsigned P_HOST_IP3 = `HOST_IP3,
+    longint unsigned P_NETMASK_IP0 = `NETMASK_IP0,
+    longint unsigned P_NETMASK_IP1 = `NETMASK_IP1,
+    longint unsigned P_NETMASK_IP2 = `NETMASK_IP2,
+    longint unsigned P_NETMASK_IP3 = `NETMASK_IP3,
+    longint unsigned P_GATEWAY_IP0 = `GATEWAY_IP0,
+    longint unsigned P_GATEWAY_IP1 = `GATEWAY_IP1,
+    longint unsigned P_GATEWAY_IP2 = `GATEWAY_IP2,
+    longint unsigned P_GATEWAY_IP3 = `GATEWAY_IP3,
+    longint unsigned P_MAC0 = `MAC0,
+    longint unsigned P_MAC1 = `MAC1,
+    longint unsigned P_MAC2 = `MAC2,
+    longint unsigned P_MAC3 = `MAC3,
+    longint unsigned P_MAC4 = `MAC4,
+    longint unsigned P_MAC5 = `MAC5,
+    longint unsigned P_UART_BAUD = `UART_BAUD,
+    longint unsigned P_JTAG_HW_SERVER_PORT = `JTAG_HW_SERVER_PORT,
+    longint unsigned P_RX_PACKET_RING_DEPTH = `RX_PACKET_RING_DEPTH,
+    longint unsigned P_E131_MAX_PACKET_BYTES = `E131_MAX_PACKET_BYTES,
+    longint unsigned P_LWIP_MEM_SIZE = `LWIP_MEM_SIZE,
+    longint unsigned P_LWIP_PBUF_POOL_SIZE = `LWIP_PBUF_POOL_SIZE,
+    longint unsigned P_LWIP_RX_DESCRIPTORS = `LWIP_RX_DESCRIPTORS
 ) {
     name = "PL control register block";
     desc = "Local PS-to-PL control and status register block. Offsets are relative to the 4 KiB control aperture assigned by Vivado.";
@@ -267,7 +337,42 @@ addrmap dawn_pl {
         .P_DEFAULT_OUTPUT_INVERT_MASK(`DEFAULT_OUTPUT_INVERT_MASK),
         .P_WS281X_BIT_RATE(`WS281X_BIT_RATE),
         .P_FRAME_BANKS(`FRAME_BANKS),
-        .P_CONTROL_RANGE_BYTES(`CONTROL_RANGE_BYTES)
+        .P_CONTROL_RANGE_BYTES(`CONTROL_RANGE_BYTES),
+        .P_E131_PORT(`E131_PORT),
+        .P_E131_FIRST_UNIVERSE(`E131_FIRST_UNIVERSE),
+        .P_E131_SLOTS_PER_UNIVERSE(`E131_SLOTS_PER_UNIVERSE),
+        .P_E131_BLACKOUT_TIMEOUT_MS(`E131_BLACKOUT_TIMEOUT_MS),
+        .P_E131_ACCEPT_PREVIEW(`E131_ACCEPT_PREVIEW),
+        .P_E131_DEFAULT_SYNC_ADDRESS(`E131_DEFAULT_SYNC_ADDRESS),
+        .P_BOARD_IP0(`BOARD_IP0),
+        .P_BOARD_IP1(`BOARD_IP1),
+        .P_BOARD_IP2(`BOARD_IP2),
+        .P_BOARD_IP3(`BOARD_IP3),
+        .P_HOST_IP0(`HOST_IP0),
+        .P_HOST_IP1(`HOST_IP1),
+        .P_HOST_IP2(`HOST_IP2),
+        .P_HOST_IP3(`HOST_IP3),
+        .P_NETMASK_IP0(`NETMASK_IP0),
+        .P_NETMASK_IP1(`NETMASK_IP1),
+        .P_NETMASK_IP2(`NETMASK_IP2),
+        .P_NETMASK_IP3(`NETMASK_IP3),
+        .P_GATEWAY_IP0(`GATEWAY_IP0),
+        .P_GATEWAY_IP1(`GATEWAY_IP1),
+        .P_GATEWAY_IP2(`GATEWAY_IP2),
+        .P_GATEWAY_IP3(`GATEWAY_IP3),
+        .P_MAC0(`MAC0),
+        .P_MAC1(`MAC1),
+        .P_MAC2(`MAC2),
+        .P_MAC3(`MAC3),
+        .P_MAC4(`MAC4),
+        .P_MAC5(`MAC5),
+        .P_UART_BAUD(`UART_BAUD),
+        .P_JTAG_HW_SERVER_PORT(`JTAG_HW_SERVER_PORT),
+        .P_RX_PACKET_RING_DEPTH(`RX_PACKET_RING_DEPTH),
+        .P_E131_MAX_PACKET_BYTES(`E131_MAX_PACKET_BYTES),
+        .P_LWIP_MEM_SIZE(`LWIP_MEM_SIZE),
+        .P_LWIP_PBUF_POOL_SIZE(`LWIP_PBUF_POOL_SIZE),
+        .P_LWIP_RX_DESCRIPTORS(`LWIP_RX_DESCRIPTORS)
     ) control @ `CONTROL_BASEADDR;
 
     external mem {

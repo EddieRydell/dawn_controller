@@ -19,6 +19,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import make_helpers
+from ps.tools.generated import pl_config
 
 
 MATRIX = {
@@ -335,13 +336,13 @@ def write_summary(out_dir: Path, rows: list[dict[str, int | float | str]]) -> No
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the 30-output E1.31 throughput benchmark on PYNQ-Z2.")
-    parser.add_argument("--source-ip", default="192.168.7.1")
-    parser.add_argument("--dest-ip", default="192.168.7.2")
-    parser.add_argument("--port", type=int, default=5568)
+    parser.add_argument("--source-ip", default=pl_config.HOST_IP_STRING)
+    parser.add_argument("--dest-ip", default=pl_config.BOARD_IP_STRING)
+    parser.add_argument("--port", type=int, default=pl_config.E131_PORT)
     parser.add_argument("--serial-port", default="")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, default=pl_config.UART_BAUD)
     parser.add_argument("--duration", type=float, default=20.0)
-    parser.add_argument("--outputs", type=int, default=30)
+    parser.add_argument("--outputs", type=int, default=pl_config.DEFAULT_ACTIVE_OUTPUT_COUNT)
     parser.add_argument("--pixels", type=int, nargs="*", default=[])
     parser.add_argument("--rates", type=float, nargs="*", default=[])
     parser.add_argument("--skip-build", action="store_true")
@@ -375,7 +376,7 @@ def main() -> int:
         for index, (pixels, rate) in enumerate(cells):
             cell_name = f"{index:02d}_{args.outputs}x{pixels}_{rate:g}fps"
             total_pixels = args.outputs * pixels
-            universe_count = math.ceil((total_pixels * 3) / 510)
+            universe_count = math.ceil((total_pixels * 3) / pl_config.E131_SLOTS_PER_UNIVERSE)
             uart_start = len(capture.lines)
             capture.drain_pending()
             print(

@@ -9,9 +9,9 @@ import uuid
 from generated import pl_config
 
 
-SLOTS_PER_UNIVERSE = 510
+SLOTS_PER_UNIVERSE = pl_config.E131_SLOTS_PER_UNIVERSE
 DEFAULT_CID = uuid.UUID("d06d0ead-beef-4000-8000-000000000001")
-DEFAULT_SYNC_ADDRESS = 63999
+DEFAULT_SYNC_ADDRESS = pl_config.E131_DEFAULT_SYNC_ADDRESS
 
 
 def rgb_for_pixel(pattern, pixel, frame, pixels_per_output):
@@ -98,10 +98,10 @@ def build_sync_packet(sequence, cid, sync_address):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Send deterministic E1.31/sACN data packets.")
-    parser.add_argument("--dest-ip", default="192.168.7.2")
+    parser.add_argument("--dest-ip", default=pl_config.BOARD_IP_STRING)
     parser.add_argument("--source-ip", default="", help="Optional local source IP/interface to bind before sending.")
-    parser.add_argument("--port", type=int, default=5568)
-    parser.add_argument("--first-universe", type=int, default=1)
+    parser.add_argument("--port", type=int, default=pl_config.E131_PORT)
+    parser.add_argument("--first-universe", type=int, default=pl_config.E131_FIRST_UNIVERSE)
     parser.add_argument("--universe-count", type=int, default=0, help="0 derives the count from outputs and pixels per output.")
     parser.add_argument("--outputs", type=int, default=pl_config.DEFAULT_ACTIVE_OUTPUT_COUNT)
     parser.add_argument("--pixels-per-output", type=int, default=pl_config.DEFAULT_STRAND_PIXEL_COUNT)
