@@ -10,6 +10,9 @@ BOOTGEN ?= bootgen
 HOST_CC ?= gcc
 PORT ?=
 BAUD ?= 115200
+SERIAL_PORT ?=
+E131_PROFILE_DURATION ?= 10
+E131_PROFILE_REPORT ?= E131_PROFILE_RESULTS.md
 
 XSA := build/vivado/dawn_controller.xsa
 BITSTREAM := build/vivado/dawn_controller.runs/impl_1/dawn_system_wrapper.bit
@@ -26,7 +29,7 @@ define collect_root_side_effects
 	$(PYTHON) make_helpers.py collect-root-side-effects $(SIDE_EFFECT_DIR)
 endef
 
-.PHONY: help all regs regs-check rtl-check rtl-sim hw ps ps-host-test boot run logs e131-send bench-e131 clean
+.PHONY: help all regs regs-check rtl-check rtl-sim hw ps ps-host-test boot run logs serial-ports e131-send bench-e131 e131-profile-report clean
 
 help:
 	@echo Common targets:
@@ -41,8 +44,10 @@ help:
 	@echo   make run     Program FPGA and run the controller app over JTAG
 	@echo   make logs   Stream UART telemetry at BAUD=115200
 	@echo   make logs PORT=COMx  Stream UART telemetry from an explicit port
+	@echo   make serial-ports  List detected serial ports
 	@echo   make e131-send  Send deterministic E1.31 UDP to 192.168.7.2:5568
 	@echo   make bench-e131  Run the 30-output E1.31 throughput benchmark
+	@echo   make e131-profile-report  Auto-detect UART, run hardware profile, and write E131_PROFILE_RESULTS.md
 	@echo   make all     Run hw, ps, and boot
 	@echo   make clean   Remove generated Xilinx output and root log clutter
 
@@ -112,11 +117,17 @@ run: $(PS_STAMP)
 logs:
 	$(PYTHON) make_helpers.py logs --port "$(PORT)" --baud $(BAUD)
 
+serial-ports:
+	$(PYTHON) make_helpers.py list-serial-ports
+
 e131-send:
 	$(PYTHON) ps/tools/e131_send.py --dest-ip 192.168.7.2 --port 5568
 
 bench-e131:
 	$(PYTHON) ps/tools/e131_benchmark.py
+
+e131-profile-report:
+	$(PYTHON) ps/tools/e131_profile_report.py --serial-port "$(SERIAL_PORT)" --baud $(BAUD) --duration $(E131_PROFILE_DURATION) --report "$(E131_PROFILE_REPORT)"
 
 clean:
 	$(PYTHON) make_helpers.py remove-paths build .Xil NA

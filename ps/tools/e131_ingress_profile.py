@@ -203,7 +203,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-ip", default="192.168.7.1")
     parser.add_argument("--dest-ip", default="192.168.7.2")
     parser.add_argument("--port", type=int, default=5568)
-    parser.add_argument("--serial-port", default="COM4")
+    parser.add_argument("--serial-port", default="")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--duration", type=float, default=20.0)
     parser.add_argument("--outputs", type=int, default=30)

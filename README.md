@@ -131,11 +131,11 @@ python ps/tools/e131_send.py --dest-ip 192.168.7.2 --pattern bars --packet-count
 
 The sender is send-only. UART remains the canonical observer. A successful packet test shows increasing `rx_packets`, `e131_valid`, and `frames_committed`. Malformed packets or packets outside the configured universe range increment `e131_rejected` and do not commit a frame.
 
-For the 30-output throughput benchmark, configure the host NIC as `192.168.7.1/24`, keep the board at `192.168.7.2`, use UDP `5568`, and keep UART on `COM4` at `115200` baud:
+For the 30-output throughput benchmark, configure the host NIC as `192.168.7.1/24`, keep the board at `192.168.7.2`, use UDP `5568`, and keep UART at `115200` baud:
 
 ```sh
 make bench-e131
-python ps/tools/e131_benchmark.py --skip-build --duration 20 --serial-port COM4
+python ps/tools/e131_benchmark.py --skip-build --duration 20
 python ps/tools/e131_benchmark.py --skip-build --sanity-only
 python ps/tools/e131_benchmark.py --skip-build --pixels 300 --rates 60
 ```
@@ -164,9 +164,17 @@ Stop throughput investigation if any cell at or below `60 FPS` reports pbuf allo
 For the non-DMA ingress profile, run:
 
 ```sh
-python ps/tools/e131_ingress_profile.py --serial-port COM4 --duration 20
+python ps/tools/e131_ingress_profile.py --duration 20
 ```
 
 The profile rebuilds `make ps` for each explicit lwIP candidate, records unsupported Vitis settings instead of substituting values, runs `30x50 @ 30 FPS` once as a guard, then runs `30x300 @ 60 FPS`, `30x500 @ 60 FPS`, and `30x1024 @ 30 FPS` per candidate. Artifacts are written under `build/bench/<timestamp>-ingress-profile/`.
+
+To run the full repeatable profile bundle and write a root-level Markdown report:
+
+```sh
+make e131-profile-report
+```
+
+This target auto-detects the board UART, runs host PS tests, Python compile checks, the full ingress candidate profile, a `30x500` ceiling sweep using the repo-default lwIP settings, and writes `E131_PROFILE_RESULTS.md` with links to the generated artifacts. Use `SERIAL_PORT=COMx` to override detection and `E131_PROFILE_DURATION=20` for longer cells.
 
 E1.31 universe data is accepted starting at `DAWN_FIRST_UNIVERSE`. RGB slots are interpreted as the same linear output-major stream used by PL frame RAM: output 0 pixels first, then output 1, and onward through the configured active output count. The PS writes those slots directly into the inactive frame bank before committing through `frame_pipeline_commit()`.

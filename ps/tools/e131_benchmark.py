@@ -175,7 +175,25 @@ class SerialCapture:
         serial_mod, _ = make_helpers.import_serial()
         if serial_mod is None:
             raise RuntimeError("pyserial is required for benchmark UART capture")
-        self._serial = make_helpers.open_serial_port(serial_mod, self.port, self.baud)
+        candidates = make_helpers.candidate_ports(self.port.strip())
+        if candidates is None or not candidates:
+            raise RuntimeError("No serial port available for benchmark UART capture")
+        errors = []
+        for port, description, explicit in candidates:
+            try:
+                if description != port:
+                    print(f"Opening {description}", flush=True)
+                self._serial = make_helpers.open_serial_port(serial_mod, port, self.baud)
+                self.port = self._serial.port
+                break
+            except serial_mod.SerialException as exc:
+                errors.append((port, exc))
+                if explicit:
+                    raise RuntimeError(f"Could not open serial port {port}: {exc}") from exc
+                print(f"Could not open serial port {port}: {exc}", file=sys.stderr, flush=True)
+        if self._serial is None:
+            detail = "; ".join(f"{port}: {exc}" for port, exc in errors)
+            raise RuntimeError(f"No auto-detected serial port could be opened. {detail}")
         self._thread = threading.Thread(target=self._reader, daemon=True)
         self._thread.start()
 
@@ -320,7 +338,7 @@ def main() -> int:
     parser.add_argument("--source-ip", default="192.168.7.1")
     parser.add_argument("--dest-ip", default="192.168.7.2")
     parser.add_argument("--port", type=int, default=5568)
-    parser.add_argument("--serial-port", default="COM4")
+    parser.add_argument("--serial-port", default="")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--duration", type=float, default=20.0)
     parser.add_argument("--outputs", type=int, default=30)
