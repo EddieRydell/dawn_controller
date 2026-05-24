@@ -6,6 +6,7 @@
 #include "xil_io.h"
 #include "xil_printf.h"
 #include "xparameters.h"
+#include "xtimer_config.h"
 
 #if defined(XPAR_WS281X_CONTROLLER_CORE_0_BASEADDR)
 #define PL_CONTROL_BASEADDR XPAR_WS281X_CONTROLLER_CORE_0_BASEADDR
@@ -36,6 +37,8 @@
 #define PL_INGEST_PIN_MASK ((1u << DAWN_PL_PIN_OUTPUT_COUNT) - 1u)
 #endif
 
+static pl_ingest_write_stats_t g_write_stats;
+
 uint32_t pl_ingest_read(uint32_t offset)
 {
     return Xil_In32(PL_CONTROL_BASEADDR + offset);
@@ -61,6 +64,43 @@ static uint32_t expected_next(uint32_t value)
     return value + 1u;
 }
 
+static uint32_t pl_ingest_now_us(void)
+{
+#if defined(XPAR_GLOBAL_TIMER_BASEADDR)
+    uint32_t high;
+    uint32_t low;
+    uint32_t control;
+    uint64_t ticks;
+
+    control = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + 0x08u);
+    if ((control & 0x01u) == 0u) {
+        Xil_Out32(XPAR_GLOBAL_TIMER_BASEADDR + 0x08u, control | 0x01u);
+    }
+
+    do {
+        high = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + 0x04u);
+        low = Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + 0x00u);
+    } while (Xil_In32(XPAR_GLOBAL_TIMER_BASEADDR + 0x04u) != high);
+
+    ticks = ((uint64_t)high << 32) | low;
+    return (uint32_t)((ticks * 1000000u) / COUNTS_PER_SECOND);
+#else
+    return 0u;
+#endif
+}
+
+static void record_write_stats(uint32_t start_us, uint32_t active_words, uint32_t required_words)
+{
+    uint32_t elapsed_us = pl_ingest_now_us() - start_us;
+
+    g_write_stats.last_write_us = elapsed_us;
+    if (elapsed_us > g_write_stats.max_write_us) {
+        g_write_stats.max_write_us = elapsed_us;
+    }
+    g_write_stats.last_active_words = active_words;
+    g_write_stats.last_required_words = required_words;
+}
+
 static int wait_for_write_bank(pl_ingest_snapshot_t *snapshot)
 {
     for (uint32_t i = 0u; i < PL_INGEST_BANK_WAIT_TRIES; ++i) {
@@ -71,6 +111,11 @@ static int wait_for_write_bank(pl_ingest_snapshot_t *snapshot)
         usleep(PL_INGEST_BANK_WAIT_US);
     }
     return -1;
+}
+
+const pl_ingest_write_stats_t *pl_ingest_write_stats(void)
+{
+    return &g_write_stats;
 }
 
 void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot)
@@ -251,6 +296,7 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
     uint32_t write_bank;
     size_t bank_offset;
     uint32_t commit_value;
+    uint32_t start_us = pl_ingest_now_us();
 
     if (words == NULL && word_count > 0u) {
         return PL_INGEST_BAD_ARGUMENT;
@@ -264,10 +310,13 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
                              | PL_CONTROL__STATUS__COMMIT_REJECTED_bm)) != 0u) {
         return PL_INGEST_BAD_STATUS;
     }
-    if ((before.write_bank_valid & PL_CONTROL__WRITE_BANK_VALID__VALUE_bm) == 0u
-        && wait_for_write_bank(&before) != 0) {
-        pl_ingest_write(PL_CONTROL_OFFSET(FRAME_DROP_NOTIFY), PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bm);
-        return PL_INGEST_NO_FREE_BANK;
+    if ((before.write_bank_valid & PL_CONTROL__WRITE_BANK_VALID__VALUE_bm) == 0u) {
+        g_write_stats.no_free_bank_waits++;
+        if (wait_for_write_bank(&before) != 0) {
+            g_write_stats.no_free_bank_drops++;
+            pl_ingest_write(PL_CONTROL_OFFSET(FRAME_DROP_NOTIFY), PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bm);
+            return PL_INGEST_NO_FREE_BANK;
+        }
     }
     bank_words = before.bank_words;
     write_bank = before.write_bank;
@@ -312,6 +361,7 @@ pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_coun
         return PL_INGEST_COMMIT_FAILED;
     }
 
+    record_write_stats(start_us, (uint32_t)word_count, (uint32_t)word_count);
     return PL_INGEST_OK;
 }
 
@@ -330,6 +380,8 @@ pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
     uint32_t first_word = 0u;
     uint32_t last_word = 0u;
     uint32_t have_last = 0u;
+    uint32_t active_words = 0u;
+    uint32_t start_us = pl_ingest_now_us();
 
     if (words == NULL && required_words > 0u) {
         return PL_INGEST_BAD_ARGUMENT;
@@ -346,10 +398,13 @@ pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
                              | PL_CONTROL__STATUS__COMMIT_REJECTED_bm)) != 0u) {
         return PL_INGEST_BAD_STATUS;
     }
-    if ((before.write_bank_valid & PL_CONTROL__WRITE_BANK_VALID__VALUE_bm) == 0u
-        && wait_for_write_bank(&before) != 0) {
-        pl_ingest_write(PL_CONTROL_OFFSET(FRAME_DROP_NOTIFY), PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bm);
-        return PL_INGEST_NO_FREE_BANK;
+    if ((before.write_bank_valid & PL_CONTROL__WRITE_BANK_VALID__VALUE_bm) == 0u) {
+        g_write_stats.no_free_bank_waits++;
+        if (wait_for_write_bank(&before) != 0) {
+            g_write_stats.no_free_bank_drops++;
+            pl_ingest_write(PL_CONTROL_OFFSET(FRAME_DROP_NOTIFY), PL_CONTROL__FRAME_DROP_NOTIFY__VALUE_bm);
+            return PL_INGEST_NO_FREE_BANK;
+        }
     }
     bank_words = before.bank_words;
     write_bank = before.write_bank;
@@ -360,6 +415,7 @@ pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
 
     uint32_t output_base = 0u;
     for (uint32_t output = 0u; output < active_count; ++output) {
+        active_words += lengths[output];
         for (uint32_t pixel = 0u; pixel < lengths[output]; ++pixel) {
             uint32_t word_index = output_base + pixel;
             if (word_index >= required_words) {
@@ -404,6 +460,7 @@ pl_ingest_result_t pl_ingest_write_frame_strands(const uint32_t *words,
         return PL_INGEST_COMMIT_FAILED;
     }
 
+    record_write_stats(start_us, active_words, required_words);
     return PL_INGEST_OK;
 }
 

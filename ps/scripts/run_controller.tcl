@@ -4,6 +4,21 @@ set bit_file [file join $repo_root build vivado dawn_controller.runs impl_1 dawn
 set vitis_workspace [file join $repo_root build vitis]
 set pl_control_base 0x43C00000
 set pl_frame_base 0x43C80000
+set bench_active_outputs ""
+set bench_pixels_per_output ""
+
+for {set arg_index 0} {$arg_index < [llength $argv]} {incr arg_index} {
+    set arg [lindex $argv $arg_index]
+    if {$arg eq "--active-outputs"} {
+        incr arg_index
+        set bench_active_outputs [lindex $argv $arg_index]
+    } elseif {$arg eq "--pixels-per-output"} {
+        incr arg_index
+        set bench_pixels_per_output [lindex $argv $arg_index]
+    } else {
+        error "Unknown argument: $arg"
+    }
+}
 
 set slcr_unlock 0xF8000008
 set slcr_lock 0xF8000004
@@ -65,6 +80,25 @@ proc post_config_pl {} {
     mwr32 $slcr_lock $slcr_lock_key
 }
 
+proc configure_runtime_strands {active_outputs pixels_per_output} {
+    global pl_control_base
+    if {$active_outputs eq "" && $pixels_per_output eq ""} {
+        return
+    }
+    if {$active_outputs eq "" || $pixels_per_output eq ""} {
+        error "Both --active-outputs and --pixels-per-output are required for runtime strand config"
+    }
+    puts [format "CONFIGURE_RUNTIME_STRANDS active_outputs=%u pixels_per_output=%u" $active_outputs $pixels_per_output]
+    mwr32 [expr {$pl_control_base + 0x080}] $active_outputs
+    for {set output 0} {$output < 30} {incr output} {
+        set length [expr {$output < $active_outputs ? $pixels_per_output : 0}]
+        mwr32 [expr {$pl_control_base + 0x084 + ($output * 4)}] $length
+    }
+    print_reg $pl_control_base 0x080 ACTIVE_OUTPUT_COUNT_CONFIGURED
+    print_reg $pl_control_base 0x084 STRAND_PIXEL_COUNT0_CONFIGURED
+    print_reg $pl_control_base 0x0fc CONFIG_STATUS_CONFIGURED
+}
+
 if {![file exists $bit_file]} {
     error "Missing bitstream: $bit_file"
 }
@@ -114,6 +148,7 @@ print_reg $pl_frame_base 0x000 FRAME_WORD0
 if {$core_id != 0x4546504c} {
     error [format "Unexpected PL core ID: 0x%08x" $core_id]
 }
+configure_runtime_strands $bench_active_outputs $bench_pixels_per_output
 
 puts "DOWNLOAD_APP $app"
 select_or_error {name =~ "*Cortex-A9*#0*"}

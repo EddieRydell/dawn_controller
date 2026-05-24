@@ -25,7 +25,7 @@ define collect_root_side_effects
 	$(PYTHON) make_helpers.py collect-root-side-effects $(SIDE_EFFECT_DIR)
 endef
 
-.PHONY: help all regs regs-check rtl-check rtl-sim hw ps ps-host-test boot run logs e131-send clean
+.PHONY: help all regs regs-check rtl-check rtl-sim hw ps ps-host-test boot run logs e131-send bench-e131 clean
 
 help:
 	@echo Common targets:
@@ -41,6 +41,7 @@ help:
 	@echo   make logs   Stream UART telemetry at BAUD=115200
 	@echo   make logs PORT=COMx  Stream UART telemetry from an explicit port
 	@echo   make e131-send  Send deterministic E1.31 UDP to 192.168.7.2:5568
+	@echo   make bench-e131  Run the 30-output E1.31 throughput benchmark
 	@echo   make all     Run hw, ps, and boot
 	@echo   make clean   Remove generated Xilinx output and root log clutter
 
@@ -107,6 +108,9 @@ logs:
 
 e131-send:
 	$(PYTHON) ps/tools/e131_send.py --dest-ip 192.168.7.2 --port 5568
+
+bench-e131:
+	$(PYTHON) ps/tools/e131_benchmark.py
 
 clean:
 	$(PYTHON) make_helpers.py remove-paths build .Xil NA

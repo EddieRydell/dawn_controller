@@ -131,4 +131,13 @@ python ps/tools/e131_send.py --dest-ip 192.168.7.2 --pattern bars --packet-count
 
 The sender is send-only. UART remains the canonical observer. A successful packet test shows increasing `rx_packets`, `e131_valid`, and `frames_committed`. Malformed packets or packets outside the configured universe range increment `e131_rejected` and do not commit a frame.
 
+For the 30-output throughput benchmark, configure the host NIC as above and keep UART on `COM4`:
+
+```sh
+make bench-e131
+python ps/tools/e131_benchmark.py --skip-build --duration 20 --serial-port COM4
+```
+
+The benchmark writes per-run artifacts under `build/bench/<timestamp>/`: `results.csv`, raw UART logs, sender logs, JTAG run/snapshot logs, and `summary.md`. It programs the FPGA/app for each pixels-per-output setting after writing runtime strand registers over JTAG, then sends timed E1.31 sweeps from `192.168.7.1`.
+
 E1.31 universe data is accepted starting at `DAWN_FIRST_UNIVERSE`. RGB slots are interpreted as the same linear output-major stream used by PL frame RAM: output 0 pixels first, then output 1, and onward through the configured active output count. The PS writes those slots directly into the inactive frame bank before committing through `frame_pipeline_commit()`.

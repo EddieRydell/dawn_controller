@@ -48,23 +48,17 @@ int main(void)
     }
 
     frame_pipeline_init();
-    uint32_t startup_lengths[DAWN_OUTPUT_COUNT];
-    for (uint32_t output = 0u; output < DAWN_OUTPUT_COUNT; ++output) {
-        startup_lengths[output] = output < DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT
-            ? DAWN_DEFAULT_STRAND_PIXEL_COUNT
-            : 0u;
-    }
-    if (frame_pipeline_configure(DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT, startup_lengths) != 0) {
-        fatal("startup_configure", -1);
-    }
-    xil_printf("strand_config active_outputs=%u first_lengths=[%u,%u,%u,%u] e131_pixels=%u e131_channels=%u\r\n",
-               (unsigned int)DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT,
-               (unsigned int)startup_lengths[0],
-               (unsigned int)startup_lengths[1],
-               (unsigned int)startup_lengths[2],
-               (unsigned int)startup_lengths[3],
+    uint32_t expected_universes = ((frame_pipeline_active_pixel_count() * 3u) + DAWN_SLOTS_PER_UNIVERSE - 1u) / DAWN_SLOTS_PER_UNIVERSE;
+    xil_printf("strand_config active_outputs=%u first_lengths=[%u,%u,%u,%u] total_pixels=%u e131_channels=%u expected_universes=%u required_commit_words=%u\r\n",
+               (unsigned int)frame_pipeline_active_output_count(),
+               (unsigned int)frame_pipeline_strand_pixel_count(0u),
+               (unsigned int)frame_pipeline_strand_pixel_count(1u),
+               (unsigned int)frame_pipeline_strand_pixel_count(2u),
+               (unsigned int)frame_pipeline_strand_pixel_count(3u),
                (unsigned int)frame_pipeline_active_pixel_count(),
-               (unsigned int)(frame_pipeline_active_pixel_count() * 3u));
+               (unsigned int)(frame_pipeline_active_pixel_count() * 3u),
+               (unsigned int)expected_universes,
+               (unsigned int)frame_pipeline_required_words());
     frame_pipeline_clear_all(0u);
     if (frame_pipeline_commit() != 0) {
         fatal("initial_frame_commit", -1);

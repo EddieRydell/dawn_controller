@@ -100,9 +100,27 @@ uint32_t *frame_pipeline_inactive_words(void)
     return g_frame_words[g_write_bank];
 }
 
+uint32_t frame_pipeline_active_output_count(void)
+{
+    return g_active_output_count;
+}
+
 uint32_t frame_pipeline_active_pixel_count(void)
 {
     return g_active_pixel_count;
+}
+
+uint32_t frame_pipeline_required_words(void)
+{
+    return g_required_words;
+}
+
+uint32_t frame_pipeline_strand_pixel_count(uint32_t output)
+{
+    if (output >= DAWN_OUTPUT_COUNT) {
+        return 0u;
+    }
+    return g_strand_pixel_count[output];
 }
 
 void frame_pipeline_clear_all(uint32_t rgb_word)

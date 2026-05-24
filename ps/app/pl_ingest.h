@@ -60,9 +60,19 @@ typedef struct {
     uint32_t output_invert_mask[DAWN_PL_MASK_WORD_COUNT];
 } pl_ingest_config_t;
 
+typedef struct {
+    uint32_t last_write_us;
+    uint32_t max_write_us;
+    uint32_t last_active_words;
+    uint32_t last_required_words;
+    uint32_t no_free_bank_waits;
+    uint32_t no_free_bank_drops;
+} pl_ingest_write_stats_t;
+
 uint32_t pl_ingest_read(uint32_t offset);
 void pl_ingest_write(uint32_t offset, uint32_t value);
 void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot);
+const pl_ingest_write_stats_t *pl_ingest_write_stats(void);
 pl_ingest_result_t pl_ingest_init(uint32_t required_words);
 pl_ingest_result_t pl_ingest_self_test(void);
 pl_ingest_result_t pl_ingest_write_frame(const uint32_t *words, size_t word_count);

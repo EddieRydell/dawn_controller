@@ -35,6 +35,12 @@ void pl_ingest_snapshot(pl_ingest_snapshot_t *snapshot)
     memset(snapshot, 0, sizeof(*snapshot));
 }
 
+const pl_ingest_write_stats_t *pl_ingest_write_stats(void)
+{
+    static pl_ingest_write_stats_t stats;
+    return &stats;
+}
+
 pl_ingest_result_t pl_ingest_get_config(pl_ingest_config_t *config)
 {
     (void)config;

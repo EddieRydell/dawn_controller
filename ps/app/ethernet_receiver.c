@@ -2,6 +2,7 @@
 
 #include "app_config.h"
 #include "e131_receiver.h"
+#include "frame_pipeline.h"
 #include "lwip/init.h"
 #include "lwip/ip_addr.h"
 #include "lwip/opt.h"
@@ -198,14 +199,22 @@ const ethernet_receiver_counters_t *ethernet_receiver_counters(void)
 void ethernet_receiver_print_status(void)
 {
     pl_ingest_snapshot_t snapshot;
+    const pl_ingest_write_stats_t *write_stats = pl_ingest_write_stats();
 
     pl_ingest_snapshot(&snapshot);
     const e131_receiver_status_t *rx = e131_receiver_status();
+    uint32_t total_pixels = frame_pipeline_active_pixel_count();
+    uint32_t expected_universes = ((total_pixels * 3u) + DAWN_SLOTS_PER_UNIVERSE - 1u) / DAWN_SLOTS_PER_UNIVERSE;
 
-    xil_printf("e131_status link=%u ip=%u.%u.%u.%u port=%u rx_packets=%u rx_bytes=%u e131_valid=%u e131_rejected=%u universes_seen=%u frames_committed=%u frames_dropped=%u complete_frames=%u incomplete_sweeps=%u ignored_sources=%u sequence_anomalies=%u preview_rejects=%u sync_mode=%u sync_address=%u sync_waits=%u sync_timeouts=%u blackouts=%u packet_gap_ms=%u max_packet_gap_ms=%u commit_gap_ms=%u max_commit_gap_ms=%u source_locked=%u active_priority=%u source_ip=%u.%u.%u.%u last_universe=%u last_sequence=%u last_error=%s pl_dropped=%u pl_rejected=%u consumer_frames=%u\r\n",
+    xil_printf("e131_status link=%u ip=%u.%u.%u.%u port=%u active_outputs=%u pixels_per_output=%u total_pixels=%u expected_universes=%u required_commit_words=%u rx_packets=%u rx_bytes=%u e131_valid=%u e131_rejected=%u universes_seen=%u frames_committed=%u frames_dropped=%u complete_frames=%u incomplete_sweeps=%u ignored_sources=%u sequence_anomalies=%u preview_rejects=%u sync_mode=%u sync_address=%u sync_waits=%u sync_timeouts=%u blackouts=%u packet_gap_ms=%u max_packet_gap_ms=%u commit_gap_ms=%u max_commit_gap_ms=%u ps_write_last_us=%u ps_write_max_us=%u ps_write_active_words=%u ps_write_required_words=%u ps_no_free_bank_waits=%u ps_no_free_bank_drops=%u source_locked=%u active_priority=%u source_ip=%u.%u.%u.%u last_universe=%u last_sequence=%u last_error=%s pl_frame_count=%u pl_committed_words=%u pl_error_count=%u pl_dropped=%u pl_rejected=%u consumer_frames=%u consumer_errors=%u pl_status=0x%08x consumer_status=0x%08x config_status=0x%08x\r\n",
                (unsigned int)g_counters.link_up,
                g_app_config.ip[0], g_app_config.ip[1], g_app_config.ip[2], g_app_config.ip[3],
                (unsigned int)g_app_config.e131_port,
+               (unsigned int)frame_pipeline_active_output_count(),
+               (unsigned int)frame_pipeline_strand_pixel_count(0u),
+               (unsigned int)total_pixels,
+               (unsigned int)expected_universes,
+               (unsigned int)frame_pipeline_required_words(),
                (unsigned int)g_counters.rx_packets,
                (unsigned int)g_counters.rx_bytes,
                (unsigned int)g_counters.e131_valid,
@@ -227,13 +236,26 @@ void ethernet_receiver_print_status(void)
                (unsigned int)g_counters.max_packet_gap_ms,
                (unsigned int)g_counters.last_frame_commit_gap_ms,
                (unsigned int)g_counters.max_frame_commit_gap_ms,
+               (unsigned int)write_stats->last_write_us,
+               (unsigned int)write_stats->max_write_us,
+               (unsigned int)write_stats->last_active_words,
+               (unsigned int)write_stats->last_required_words,
+               (unsigned int)write_stats->no_free_bank_waits,
+               (unsigned int)write_stats->no_free_bank_drops,
                (unsigned int)rx->source_locked,
                (unsigned int)rx->active_priority,
                rx->source_ip[0], rx->source_ip[1], rx->source_ip[2], rx->source_ip[3],
                (unsigned int)g_counters.last_universe,
                (unsigned int)g_counters.last_sequence,
                g_counters.last_error,
+               (unsigned int)snapshot.frame_count,
+               (unsigned int)snapshot.committed_words,
+               (unsigned int)snapshot.error_count,
                (unsigned int)snapshot.frame_dropped,
                (unsigned int)snapshot.frame_rejected,
-               (unsigned int)snapshot.consumer_frame_count);
+               (unsigned int)snapshot.consumer_frame_count,
+               (unsigned int)snapshot.consumer_error_count,
+               (unsigned int)snapshot.status,
+               (unsigned int)snapshot.consumer_status,
+               (unsigned int)snapshot.config_status);
 }

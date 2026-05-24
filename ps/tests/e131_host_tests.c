@@ -30,6 +30,22 @@ uint32_t frame_pipeline_active_pixel_count(void)
     return HOST_ACTIVE_PIXELS;
 }
 
+uint32_t frame_pipeline_active_output_count(void)
+{
+    return DAWN_DEFAULT_ACTIVE_OUTPUT_COUNT;
+}
+
+uint32_t frame_pipeline_required_words(void)
+{
+    return DAWN_WORDS_PER_FRAME;
+}
+
+uint32_t frame_pipeline_strand_pixel_count(uint32_t output)
+{
+    (void)output;
+    return DAWN_DEFAULT_STRAND_PIXEL_COUNT;
+}
+
 void frame_pipeline_init(void)
 {
 }
