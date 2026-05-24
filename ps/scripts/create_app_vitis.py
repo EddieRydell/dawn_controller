@@ -18,6 +18,31 @@ def env_int(name, default=None):
     return int(value, 0)
 
 
+def replace_exactly_once(path, old, new, label):
+    text = path.read_text()
+    count = text.count(old)
+    if count == 0:
+        raise RuntimeError(f"{label}: expected text not found in {path}")
+    if count != 1:
+        raise RuntimeError(f"{label}: expected exactly one match in {path}, found {count}")
+    path.write_text(text.replace(old, new, 1))
+
+
+def replace_or_verify_exactly_once(path, old, new, label):
+    text = path.read_text()
+    old_count = text.count(old)
+    new_count = text.count(new)
+    if old_count == 1 and new_count == 0:
+        path.write_text(text.replace(old, new, 1))
+        return
+    if old_count == 0 and new_count == 1:
+        return
+    raise RuntimeError(
+        f"{label}: expected one replaceable or already-updated match in {path}, "
+        f"found old={old_count} new={new_count}"
+    )
+
+
 repo_root = Path(__file__).resolve().parents[2]
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
@@ -79,12 +104,12 @@ for env_name, param_name, default_value in (
 
 mark("silence generated fsbl warnings")
 fsbl_user_config = workspace / "dawn_platform" / "zynq_fsbl" / "UserConfig.cmake"
-fsbl_config = fsbl_user_config.read_text()
-fsbl_config = fsbl_config.replace(
+replace_exactly_once(
+    fsbl_user_config,
     "set(USER_COMPILE_WARNINGS_INHIBIT_ALL )",
     "set(USER_COMPILE_WARNINGS_INHIBIT_ALL -w)",
+    "FSBL warning suppression",
 )
-fsbl_user_config.write_text(fsbl_config)
 
 mark("platform build")
 platform.build()
@@ -105,25 +130,27 @@ app.import_files(from_loc=str(repo_root / "ps" / "app"), dest_dir_in_cmp="src")
 
 mark("optimize app build")
 app_user_config = workspace / "dawn_controller" / "src" / "UserConfig.cmake"
-app_config = app_user_config.read_text()
-app_config = app_config.replace(
+replace_exactly_once(
+    app_user_config,
     "set(USER_COMPILE_OPTIMIZATION_LEVEL -O0)",
     "set(USER_COMPILE_OPTIMIZATION_LEVEL -O2)",
+    "app optimization level",
 )
-app_config = app_config.replace(
+replace_exactly_once(
+    app_user_config,
     "set(USER_COMPILE_DEBUG_LEVEL -g3)",
     "set(USER_COMPILE_DEBUG_LEVEL -g1)",
+    "app debug level",
 )
-app_user_config.write_text(app_config)
 
 mark("link lwip")
 app_cmake = workspace / "dawn_controller" / "src" / "CMakeLists.txt"
-app_cmake_text = app_cmake.read_text()
-app_cmake_text = app_cmake_text.replace(
+replace_or_verify_exactly_once(
+    app_cmake,
     "collect(PROJECT_LIB_DEPS xilstandalone;xiltimer)",
     "collect(PROJECT_LIB_DEPS xilstandalone;xiltimer;lwip220)",
+    "app lwIP link dependency",
 )
-app_cmake.write_text(app_cmake_text)
 
 mark("app build")
 app.build()
