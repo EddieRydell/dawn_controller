@@ -65,15 +65,15 @@ set control_addr_seg [get_bd_addr_segs -quiet {processing_system7_0/Data/*ws281x
 if {[llength $control_addr_seg] == 0} {
   error "Could not find assigned address segment for ws281x_controller_core_0"
 }
-set_property range 4K $control_addr_seg
-set_property offset 0x43C00000 $control_addr_seg
+set_property range $dawn_pl_control_range_bytes $control_addr_seg
+set_property offset $dawn_pl_control_baseaddr $control_addr_seg
 
 set frame_addr_seg [get_bd_addr_segs -quiet {processing_system7_0/Data/*axil_frame_ram_0*}]
 if {[llength $frame_addr_seg] == 0} {
   error "Could not find assigned address segment for axil_frame_ram_0"
 }
 set_property range $dawn_pl_frame_range_bytes $frame_addr_seg
-set_property offset 0x43C80000 $frame_addr_seg
+set_property offset $dawn_pl_frame_ram_baseaddr $frame_addr_seg
 
 validate_bd_design
 save_bd_design

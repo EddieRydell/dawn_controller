@@ -1,12 +1,29 @@
-// dawn_config OUTPUT_COUNT=30
-// dawn_config PIN_OUTPUT_COUNT=30
-// dawn_config PIXELS_PER_OUTPUT=1024
-// dawn_config DEFAULT_ACTIVE_OUTPUT_COUNT=30
-// dawn_config DEFAULT_STRAND_PIXEL_COUNT=50
-// dawn_config DEFAULT_OUTPUT_INVERT_MASK=1073741823
-// dawn_config WS281X_BIT_RATE=800000
+`define OUTPUT_COUNT 30
+`define PIN_OUTPUT_COUNT 30
+`define PIXELS_PER_OUTPUT 1024
+`define DEFAULT_ACTIVE_OUTPUT_COUNT 30
+`define DEFAULT_STRAND_PIXEL_COUNT 50
+`define DEFAULT_OUTPUT_INVERT_MASK 1073741823
+`define WS281X_BIT_RATE 800000
+`define FRAME_BANKS 2
+`define CONTROL_BASEADDR 32'h43c00000
+`define CONTROL_RANGE_BYTES 4096
+`define FRAME_RAM_BASEADDR 32'h43c80000
+`define FRAME_WORDS_PER_BANK (`OUTPUT_COUNT * `PIXELS_PER_OUTPUT)
+`define FRAME_WORDS (`FRAME_BANKS * `FRAME_WORDS_PER_BANK)
+`define FRAME_RAM_RANGE_BYTES 262144
 
-addrmap pl_control {
+addrmap pl_control #(
+    longint unsigned P_OUTPUT_COUNT = `OUTPUT_COUNT,
+    longint unsigned P_PIN_OUTPUT_COUNT = `PIN_OUTPUT_COUNT,
+    longint unsigned P_PIXELS_PER_OUTPUT = `PIXELS_PER_OUTPUT,
+    longint unsigned P_DEFAULT_ACTIVE_OUTPUT_COUNT = `DEFAULT_ACTIVE_OUTPUT_COUNT,
+    longint unsigned P_DEFAULT_STRAND_PIXEL_COUNT = `DEFAULT_STRAND_PIXEL_COUNT,
+    longint unsigned P_DEFAULT_OUTPUT_INVERT_MASK = `DEFAULT_OUTPUT_INVERT_MASK,
+    longint unsigned P_WS281X_BIT_RATE = `WS281X_BIT_RATE,
+    longint unsigned P_FRAME_BANKS = `FRAME_BANKS,
+    longint unsigned P_CONTROL_RANGE_BYTES = `CONTROL_RANGE_BYTES
+) {
     name = "PL control register block";
     desc = "Local PS-to-PL control and status register block. Offsets are relative to the 4 KiB control aperture assigned by Vivado.";
 
@@ -53,7 +70,7 @@ addrmap pl_control {
     reg {
         name = "FRAME_CAPACITY";
         desc = "PL frame storage capacity in 32-bit words.";
-        field { sw = r; hw = w; reset = 32'd61440; } value[31:0];
+        field { sw = r; hw = w; reset = P_OUTPUT_COUNT * P_PIXELS_PER_OUTPUT * P_FRAME_BANKS; } value[31:0];
     } FRAME_CAPACITY @ 12'h018;
 
     reg {
@@ -96,7 +113,7 @@ addrmap pl_control {
     reg {
         name = "FRAME_BANK_WORDS";
         desc = "Words per frame bank.";
-        field { sw = r; hw = w; reset = 32'd30720; } value[31:0];
+        field { sw = r; hw = w; reset = P_OUTPUT_COUNT * P_PIXELS_PER_OUTPUT; } value[31:0];
     } FRAME_BANK_WORDS @ 12'h038;
 
     reg {
@@ -154,19 +171,19 @@ addrmap pl_control {
     reg {
         name = "WS281X_BIT_RATE";
         desc = "Configured serializer bit rate.";
-        field { sw = r; hw = na; reset = 32'd800000; } value[31:0];
+        field { sw = r; hw = na; reset = P_WS281X_BIT_RATE; } value[31:0];
     } WS281X_BIT_RATE @ 12'h05c;
 
     reg {
         name = "WS281X_OUTPUT_COUNT";
         desc = "Configured parallel output count.";
-        field { sw = r; hw = na; reset = 32'd30; } value[31:0];
+        field { sw = r; hw = na; reset = P_OUTPUT_COUNT; } value[31:0];
     } WS281X_OUTPUT_COUNT @ 12'h060;
 
     reg {
         name = "WS281X_PIXELS_PER_OUTPUT";
         desc = "Configured pixels per output.";
-        field { sw = r; hw = na; reset = 32'd1024; } value[31:0];
+        field { sw = r; hw = na; reset = P_PIXELS_PER_OUTPUT; } value[31:0];
     } WS281X_PIXELS_PER_OUTPUT @ 12'h064;
 
     reg {
@@ -208,14 +225,14 @@ addrmap pl_control {
     reg {
         name = "ACTIVE_OUTPUT_COUNT";
         desc = "Runtime active WS281x output count. Hardware clamps values above the synthesized output count.";
-        field { sw = rw; hw = r; reset = 32'd30; swmod = true; } value[31:0];
+        field { sw = rw; hw = r; reset = P_DEFAULT_ACTIVE_OUTPUT_COUNT; swmod = true; } value[31:0];
     } ACTIVE_OUTPUT_COUNT @ 12'h080;
 
     reg {
         name = "STRAND_PIXEL_COUNT";
         desc = "Runtime pixel count for each WS281x output. Hardware clamps values above the synthesized pixels per output.";
-        field { sw = rw; hw = r; reset = 32'd50; swmod = true; } value[31:0];
-    } STRAND_PIXEL_COUNT[30] @ 12'h084 += 4;
+        field { sw = rw; hw = r; reset = P_DEFAULT_STRAND_PIXEL_COUNT; swmod = true; } value[31:0];
+    } STRAND_PIXEL_COUNT[P_OUTPUT_COUNT] @ 12'h084 += 4;
 
     reg {
         name = "CONFIG_STATUS";
@@ -233,6 +250,30 @@ addrmap pl_control {
     reg {
         name = "OUTPUT_INVERT_MASK";
         desc = "Runtime WS281x output inversion mask words. Bit n inverts physical output n after serialization.";
-        field { sw = rw; hw = r; reset = 32'h3fffffff; desc = "Output inversion mask word. Bits above the synthesized output count are ignored."; } value[31:0];
-    } OUTPUT_INVERT_MASK[1] @ 12'h104 += 4;
+        field { sw = rw; hw = r; reset = P_DEFAULT_OUTPUT_INVERT_MASK; desc = "Output inversion mask word. Bits above the synthesized output count are ignored."; } value[31:0];
+    } OUTPUT_INVERT_MASK[(P_OUTPUT_COUNT + 31) / 32] @ 12'h104 += 4;
+};
+
+addrmap dawn_pl {
+    name = "Dawn PL system address map";
+    desc = "Absolute PS-visible placement for the PL control block and frame RAM aperture.";
+
+    pl_control #(
+        .P_OUTPUT_COUNT(`OUTPUT_COUNT),
+        .P_PIN_OUTPUT_COUNT(`PIN_OUTPUT_COUNT),
+        .P_PIXELS_PER_OUTPUT(`PIXELS_PER_OUTPUT),
+        .P_DEFAULT_ACTIVE_OUTPUT_COUNT(`DEFAULT_ACTIVE_OUTPUT_COUNT),
+        .P_DEFAULT_STRAND_PIXEL_COUNT(`DEFAULT_STRAND_PIXEL_COUNT),
+        .P_DEFAULT_OUTPUT_INVERT_MASK(`DEFAULT_OUTPUT_INVERT_MASK),
+        .P_WS281X_BIT_RATE(`WS281X_BIT_RATE),
+        .P_FRAME_BANKS(`FRAME_BANKS),
+        .P_CONTROL_RANGE_BYTES(`CONTROL_RANGE_BYTES)
+    ) control @ `CONTROL_BASEADDR;
+
+    external mem {
+        name = "PL frame RAM";
+        desc = "PS-writable frame RAM aperture consumed by the WS281x controller.";
+        mementries = `FRAME_RAM_RANGE_BYTES / 4;
+        memwidth = 32;
+    } frame_ram @ `FRAME_RAM_BASEADDR;
 };

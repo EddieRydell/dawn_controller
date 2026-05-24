@@ -1,9 +1,10 @@
 set repo_root [file normalize [file join [file dirname [info script]] .. ..]]
+source [file join $repo_root hw scripts generated pl_config.tcl]
 set hw_server_url "TCP:localhost:3121"
 set bit_file [file join $repo_root build vivado dawn_controller.runs impl_1 dawn_system_wrapper.bit]
 set vitis_workspace [file join $repo_root build vitis]
-set pl_control_base 0x43C00000
-set pl_frame_base 0x43C80000
+set pl_control_base $dawn_pl_control_baseaddr
+set pl_frame_base $dawn_pl_frame_ram_baseaddr
 set bench_active_outputs ""
 set bench_pixels_per_output ""
 
@@ -61,6 +62,32 @@ proc print_reg {base offset name} {
     return $value
 }
 
+proc pl_reg_addr {name {index 0}} {
+    global pl_control_base dawn_pl_reg_offset dawn_pl_reg_count dawn_pl_reg_stride
+    if {![info exists dawn_pl_reg_offset($name)]} {
+        error "Unknown PL register: $name"
+    }
+    set offset $dawn_pl_reg_offset($name)
+    if {[info exists dawn_pl_reg_count($name)]} {
+        if {$index < 0 || $index >= $dawn_pl_reg_count($name)} {
+            error "PL register index out of range: $name\[$index\]"
+        }
+        set offset [expr {$offset + ($index * $dawn_pl_reg_stride($name))}]
+    } elseif {$index != 0} {
+        error "PL register is not arrayed: $name"
+    }
+    return [expr {$pl_control_base + $offset}]
+}
+
+proc print_pl_reg {name {label ""} {index 0}} {
+    if {$label eq ""} {
+        set label $name
+    }
+    set value [mrd32 [pl_reg_addr $name $index]]
+    puts [format "%s=0x%08x" $label $value]
+    return $value
+}
+
 proc print_frame_word {base bank_words bank word name} {
     set byte_offset [expr {(($bank * $bank_words) + $word) * 4}]
     set value [mrd32 [expr {$base + $byte_offset}]]
@@ -81,7 +108,7 @@ proc post_config_pl {} {
 }
 
 proc configure_runtime_strands {active_outputs pixels_per_output} {
-    global pl_control_base
+    global dawn_pl_output_count
     if {$active_outputs eq "" && $pixels_per_output eq ""} {
         return
     }
@@ -89,14 +116,14 @@ proc configure_runtime_strands {active_outputs pixels_per_output} {
         error "Both --active-outputs and --pixels-per-output are required for runtime strand config"
     }
     puts [format "CONFIGURE_RUNTIME_STRANDS active_outputs=%u pixels_per_output=%u" $active_outputs $pixels_per_output]
-    mwr32 [expr {$pl_control_base + 0x080}] $active_outputs
-    for {set output 0} {$output < 30} {incr output} {
+    mwr32 [pl_reg_addr ACTIVE_OUTPUT_COUNT] $active_outputs
+    for {set output 0} {$output < $dawn_pl_output_count} {incr output} {
         set length [expr {$output < $active_outputs ? $pixels_per_output : 0}]
-        mwr32 [expr {$pl_control_base + 0x084 + ($output * 4)}] $length
+        mwr32 [pl_reg_addr STRAND_PIXEL_COUNT $output] $length
     }
-    print_reg $pl_control_base 0x080 ACTIVE_OUTPUT_COUNT_CONFIGURED
-    print_reg $pl_control_base 0x084 STRAND_PIXEL_COUNT0_CONFIGURED
-    print_reg $pl_control_base 0x0fc CONFIG_STATUS_CONFIGURED
+    print_pl_reg ACTIVE_OUTPUT_COUNT ACTIVE_OUTPUT_COUNT_CONFIGURED
+    print_pl_reg STRAND_PIXEL_COUNT STRAND_PIXEL_COUNT0_CONFIGURED 0
+    print_pl_reg CONFIG_STATUS CONFIG_STATUS_CONFIGURED
 }
 
 if {![file exists $bit_file]} {
@@ -134,17 +161,17 @@ configparams force-mem-accesses 1
 post_config_pl
 
 puts "PL_PROBE"
-set core_id [print_reg $pl_control_base 0x000 CORE_ID]
-print_reg $pl_control_base 0x004 VERSION
-print_reg $pl_control_base 0x00c STATUS
-print_reg $pl_control_base 0x010 PIN_OUT
-print_reg $pl_control_base 0x018 FRAME_CAPACITY
-print_reg $pl_control_base 0x038 FRAME_BANK_WORDS
-print_reg $pl_control_base 0x03c ACTIVE_BANK
-print_reg $pl_control_base 0x040 WRITE_BANK
-print_reg $pl_control_base 0x06c WRITE_BANK_VALID
-print_reg $pl_control_base 0x070 BUSY_BANK
-print_reg $pl_frame_base 0x000 FRAME_WORD0
+set core_id [print_pl_reg ID CORE_ID]
+print_pl_reg VERSION
+print_pl_reg STATUS
+print_pl_reg PIN_OUT
+print_pl_reg FRAME_CAPACITY
+print_pl_reg FRAME_BANK_WORDS
+print_pl_reg ACTIVE_BANK
+print_pl_reg WRITE_BANK
+print_pl_reg WRITE_BANK_VALID
+print_pl_reg BUSY_BANK
+print_reg $pl_frame_base 0 FRAME_WORD0
 if {$core_id != 0x4546504c} {
     error [format "Unexpected PL core ID: 0x%08x" $core_id]
 }
@@ -158,37 +185,37 @@ con
 
 after 5000
 puts "PL_AFTER_APP"
-print_reg $pl_control_base 0x010 PIN_OUT
-print_reg $pl_control_base 0x024 FRAME_COUNT
-print_reg $pl_control_base 0x028 COMMITTED_WORDS
-print_reg $pl_control_base 0x02c FIRST_FRAME_WORD
-print_reg $pl_control_base 0x030 LAST_FRAME_WORD
-print_reg $pl_control_base 0x034 ERROR_COUNT
-set bank_words [print_reg $pl_control_base 0x038 FRAME_BANK_WORDS]
-set active_bank [print_reg $pl_control_base 0x03c ACTIVE_BANK]
-print_reg $pl_control_base 0x040 WRITE_BANK
-print_reg $pl_control_base 0x044 FRAME_SEQUENCE
-print_reg $pl_control_base 0x04c CONSUMER_STATUS
-print_reg $pl_control_base 0x050 CONSUMER_SEQUENCE
-print_reg $pl_control_base 0x054 CONSUMER_FRAME_COUNT
-print_reg $pl_control_base 0x058 CONSUMER_ERROR_COUNT
-print_reg $pl_control_base 0x05c WS281X_BIT_RATE
-print_reg $pl_control_base 0x060 WS281X_OUTPUT_COUNT
-print_reg $pl_control_base 0x064 WS281X_PIXELS_PER_OUTPUT
-print_reg $pl_control_base 0x080 ACTIVE_OUTPUT_COUNT
-print_reg $pl_control_base 0x084 STRAND_PIXEL_COUNT0
-print_reg $pl_control_base 0x088 STRAND_PIXEL_COUNT1
-print_reg $pl_control_base 0x08c STRAND_PIXEL_COUNT2
-print_reg $pl_control_base 0x090 STRAND_PIXEL_COUNT3
-print_reg $pl_control_base 0x0fc CONFIG_STATUS
-print_reg $pl_control_base 0x100 STRAND_LENGTH_CLAMPED0
-print_reg $pl_control_base 0x104 OUTPUT_INVERT_MASK0
-print_reg $pl_control_base 0x068 CONSUMER_DEBUG
-print_reg $pl_control_base 0x06c WRITE_BANK_VALID
-print_reg $pl_control_base 0x070 BUSY_BANK
-print_reg $pl_control_base 0x074 FRAME_DROPPED
-print_reg $pl_control_base 0x078 FRAME_REJECTED
-print_reg $pl_control_base 0x00c STATUS
+print_pl_reg PIN_OUT
+print_pl_reg FRAME_COUNT
+print_pl_reg COMMITTED_WORDS
+print_pl_reg FIRST_FRAME_WORD
+print_pl_reg LAST_FRAME_WORD
+print_pl_reg ERROR_COUNT
+set bank_words [print_pl_reg FRAME_BANK_WORDS]
+set active_bank [print_pl_reg ACTIVE_BANK]
+print_pl_reg WRITE_BANK
+print_pl_reg FRAME_SEQUENCE
+print_pl_reg CONSUMER_STATUS
+print_pl_reg CONSUMER_SEQUENCE
+print_pl_reg CONSUMER_FRAME_COUNT
+print_pl_reg CONSUMER_ERROR_COUNT
+print_pl_reg WS281X_BIT_RATE
+print_pl_reg WS281X_OUTPUT_COUNT
+print_pl_reg WS281X_PIXELS_PER_OUTPUT
+print_pl_reg ACTIVE_OUTPUT_COUNT
+print_pl_reg STRAND_PIXEL_COUNT STRAND_PIXEL_COUNT0 0
+print_pl_reg STRAND_PIXEL_COUNT STRAND_PIXEL_COUNT1 1
+print_pl_reg STRAND_PIXEL_COUNT STRAND_PIXEL_COUNT2 2
+print_pl_reg STRAND_PIXEL_COUNT STRAND_PIXEL_COUNT3 3
+print_pl_reg CONFIG_STATUS
+print_pl_reg STRAND_LENGTH_CLAMPED STRAND_LENGTH_CLAMPED0 0
+print_pl_reg OUTPUT_INVERT_MASK OUTPUT_INVERT_MASK0 0
+print_pl_reg CONSUMER_DEBUG
+print_pl_reg WRITE_BANK_VALID
+print_pl_reg BUSY_BANK
+print_pl_reg FRAME_DROPPED
+print_pl_reg FRAME_REJECTED
+print_pl_reg STATUS
 print_frame_word $pl_frame_base $bank_words $active_bank 0 ACTIVE_FRAME_WORD0
 
 disconnect

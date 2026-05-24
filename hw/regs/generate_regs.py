@@ -5,7 +5,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import OrderedDict
 from pathlib import Path
+
+from systemrdl import RDLCompiler
+from systemrdl.node import AddrmapNode, MemNode, RegNode
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +21,61 @@ RTL_DIR = REPO_ROOT / "hw" / "rtl" / "generated"
 RTL_CONFIG = RTL_DIR / "pl_config_pkg.sv"
 TCL_CONFIG = REPO_ROOT / "hw" / "scripts" / "generated" / "pl_config.tcl"
 DOCS_DIR = REPO_ROOT / "build" / "docs" / "regs" / "pl_control"
+PL_CONTROL_TOP = "pl_control"
+SYSTEM_TOP = "dawn_pl"
+CONTROL_INST = "control"
+FRAME_RAM_INST = "frame_ram"
+
+PARAM_TO_CONFIG = OrderedDict([
+    ("P_OUTPUT_COUNT", "OUTPUT_COUNT"),
+    ("P_PIN_OUTPUT_COUNT", "PIN_OUTPUT_COUNT"),
+    ("P_PIXELS_PER_OUTPUT", "PIXELS_PER_OUTPUT"),
+    ("P_DEFAULT_ACTIVE_OUTPUT_COUNT", "DEFAULT_ACTIVE_OUTPUT_COUNT"),
+    ("P_DEFAULT_STRAND_PIXEL_COUNT", "DEFAULT_STRAND_PIXEL_COUNT"),
+    ("P_DEFAULT_OUTPUT_INVERT_MASK", "DEFAULT_OUTPUT_INVERT_MASK"),
+    ("P_WS281X_BIT_RATE", "WS281X_BIT_RATE"),
+    ("P_FRAME_BANKS", "FRAME_BANKS"),
+    ("P_CONTROL_RANGE_BYTES", "CONTROL_RANGE_BYTES"),
+])
+
+REQUIRED_REGS = [
+    "ID",
+    "VERSION",
+    "CONTROL",
+    "STATUS",
+    "PIN_OUT",
+    "COUNTER",
+    "FRAME_CAPACITY",
+    "FRAME_COMMIT",
+    "FRAME_COUNT",
+    "COMMITTED_WORDS",
+    "FIRST_FRAME_WORD",
+    "LAST_FRAME_WORD",
+    "ERROR_COUNT",
+    "FRAME_BANK_WORDS",
+    "ACTIVE_BANK",
+    "WRITE_BANK",
+    "FRAME_SEQUENCE",
+    "CONSUMER_CONTROL",
+    "CONSUMER_STATUS",
+    "CONSUMER_SEQUENCE",
+    "CONSUMER_FRAME_COUNT",
+    "CONSUMER_ERROR_COUNT",
+    "WS281X_BIT_RATE",
+    "WS281X_OUTPUT_COUNT",
+    "WS281X_PIXELS_PER_OUTPUT",
+    "CONSUMER_DEBUG",
+    "WRITE_BANK_VALID",
+    "BUSY_BANK",
+    "FRAME_DROPPED",
+    "FRAME_REJECTED",
+    "FRAME_DROP_NOTIFY",
+    "ACTIVE_OUTPUT_COUNT",
+    "STRAND_PIXEL_COUNT",
+    "CONFIG_STATUS",
+    "STRAND_LENGTH_CLAMPED",
+    "OUTPUT_INVERT_MASK",
+]
 
 
 def run(cmd):
@@ -32,38 +91,86 @@ def ceil_log2(value):
     return width
 
 
-def read_config():
-    config = {}
-    pattern = re.compile(r"^\s*//\s*dawn_config\s+([A-Z0-9_]+)\s*=\s*([0-9]+)\s*$")
-    for line in RDL.read_text().splitlines():
-        match = pattern.match(line)
-        if match:
-            config[match.group(1)] = int(match.group(2), 10)
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
 
-    required = [
-        "OUTPUT_COUNT",
-        "PIN_OUTPUT_COUNT",
-        "PIXELS_PER_OUTPUT",
-        "DEFAULT_ACTIVE_OUTPUT_COUNT",
-        "DEFAULT_STRAND_PIXEL_COUNT",
-        "DEFAULT_OUTPUT_INVERT_MASK",
-        "WS281X_BIT_RATE",
-    ]
-    missing = [name for name in required if name not in config]
-    if missing:
-        raise RuntimeError(f"Missing dawn_config entries in {RDL}: {', '.join(missing)}")
 
-    config["FRAME_BANKS"] = 2
+def elaborate_system():
+    rdlc = RDLCompiler()
+    rdlc.compile_file(str(RDL))
+    root = rdlc.elaborate(top_def_name=SYSTEM_TOP)
+    top = root.children()[0]
+    require(top.inst_name == SYSTEM_TOP, f"Expected top addrmap {SYSTEM_TOP}, got {top.inst_name}")
+    return top
+
+
+def child_by_name(parent, name, cls):
+    child = parent.get_child_by_name(name)
+    require(child is not None, f"Missing {name} in {parent.get_path()}")
+    require(isinstance(child, cls), f"{name} in {parent.get_path()} is {type(child).__name__}, expected {cls.__name__}")
+    return child
+
+
+def read_config_and_regs():
+    top = elaborate_system()
+    control = child_by_name(top, CONTROL_INST, AddrmapNode)
+    frame_ram = child_by_name(top, FRAME_RAM_INST, MemNode)
+
+    config = OrderedDict()
+    for param_name, config_name in PARAM_TO_CONFIG.items():
+        require(param_name in control.parameters, f"Missing RDL parameter {param_name} on {control.get_path()}")
+        config[config_name] = int(control.parameters[param_name])
+
     config["FRAME_WORDS_PER_BANK"] = config["OUTPUT_COUNT"] * config["PIXELS_PER_OUTPUT"]
     config["FRAME_WORDS"] = config["FRAME_BANKS"] * config["FRAME_WORDS_PER_BANK"]
+    config["FRAME_RAM_WORDS"] = config["FRAME_WORDS"]
     config["FRAME_BYTES"] = config["FRAME_WORDS"] * 4
-    config["FRAME_ADDR_WIDTH"] = ceil_log2(config["FRAME_BYTES"])
-    config["FRAME_RANGE_BYTES"] = 1 << config["FRAME_ADDR_WIDTH"]
+    config["CONTROL_BASEADDR"] = int(control.absolute_address)
+    config["FRAME_RAM_BASEADDR"] = int(frame_ram.absolute_address)
+    config["FRAME_RAM_RANGE_BYTES"] = int(frame_ram.size)
+    config["FRAME_RANGE_BYTES"] = config["FRAME_RAM_RANGE_BYTES"]
+    config["CONTROL_ADDR_WIDTH"] = ceil_log2(config["CONTROL_RANGE_BYTES"])
+    config["FRAME_ADDR_WIDTH"] = ceil_log2(config["FRAME_RAM_RANGE_BYTES"])
     config["MASK_WORD_COUNT"] = (config["OUTPUT_COUNT"] + 31) // 32
     config["OUTPUT_INDEX_WIDTH"] = ceil_log2(config["OUTPUT_COUNT"])
     config["ACTIVE_OUTPUT_WIDTH"] = ceil_log2(config["OUTPUT_COUNT"] + 1)
     config["PIXEL_COUNT_WIDTH"] = ceil_log2(config["PIXELS_PER_OUTPUT"] + 1)
-    return config
+
+    require(config["CONTROL_RANGE_BYTES"] > 0, "CONTROL_RANGE_BYTES must be positive")
+    require(control.size <= config["CONTROL_RANGE_BYTES"], "pl_control registers exceed CONTROL_RANGE_BYTES")
+    require(config["FRAME_RAM_RANGE_BYTES"] >= config["FRAME_BYTES"], "frame RAM aperture is smaller than frame storage")
+    require(frame_ram.get_property("memwidth") == 32, "frame_ram memwidth must be 32")
+    require(frame_ram.get_property("mementries") * 4 == config["FRAME_RAM_RANGE_BYTES"], "frame_ram size metadata is inconsistent")
+
+    regs = OrderedDict()
+    for reg in control.registers(unroll=False):
+        require(isinstance(reg, RegNode), f"{reg.get_path()} is not a register")
+        try:
+            offset = int(reg.address_offset)
+        except ValueError:
+            offset = int(reg.raw_address_offset)
+        count = 1
+        arrayed = reg.array_dimensions is not None
+        if reg.array_dimensions is not None:
+            require(len(reg.array_dimensions) == 1, f"{reg.inst_name} must be a one-dimensional array")
+            count = int(reg.array_dimensions[0])
+            require(reg.array_stride is not None, f"{reg.inst_name} missing array stride")
+        regs[reg.inst_name] = {
+            "offset": offset,
+            "count": count,
+            "stride": int(reg.array_stride or 0),
+            "arrayed": arrayed,
+        }
+
+    missing_regs = [name for name in REQUIRED_REGS if name not in regs]
+    require(not missing_regs, f"Missing required registers: {', '.join(missing_regs)}")
+    require(regs["STRAND_PIXEL_COUNT"]["count"] == config["OUTPUT_COUNT"], "STRAND_PIXEL_COUNT count must match OUTPUT_COUNT")
+    require(regs["STRAND_PIXEL_COUNT"]["stride"] == 4, "STRAND_PIXEL_COUNT stride must be 4")
+    require(regs["OUTPUT_INVERT_MASK"]["count"] == config["MASK_WORD_COUNT"], "OUTPUT_INVERT_MASK count must match MASK_WORD_COUNT")
+    require(regs["STRAND_LENGTH_CLAMPED"]["count"] == config["MASK_WORD_COUNT"], "STRAND_LENGTH_CLAMPED count must match MASK_WORD_COUNT")
+
+    return config, regs
 
 
 def write_if_changed(path, text):
@@ -71,7 +178,7 @@ def write_if_changed(path, text):
     path.write_text(text, newline="")
 
 
-def emit_config_artifacts(out_root, config):
+def emit_config_artifacts(out_root, config, regs):
     ps_config = out_root / "ps" / "app" / "generated" / "pl_config.h"
     rtl_config = out_root / "hw" / "rtl" / "generated" / "pl_config_pkg.sv"
     tcl_config = out_root / "hw" / "scripts" / "generated" / "pl_config.tcl"
@@ -101,6 +208,14 @@ def emit_config_artifacts(out_root, config):
     for name, value in config.items():
         tcl_lines.append(f"set dawn_pl_{name.lower()} {value}")
     tcl_lines.append("")
+    for name, metadata in regs.items():
+        tcl_lines.append(f"set dawn_pl_reg_offset({name}) {metadata['offset']}")
+    tcl_lines.append("")
+    for name, metadata in regs.items():
+        if metadata["arrayed"]:
+            tcl_lines.append(f"set dawn_pl_reg_count({name}) {metadata['count']}")
+            tcl_lines.append(f"set dawn_pl_reg_stride({name}) {metadata['stride']}")
+    tcl_lines.append("")
     write_if_changed(tcl_config, "\n".join(tcl_lines))
 
     py_lines = ["# Generated from hw/regs/pl_control.rdl. Do not edit."]
@@ -111,17 +226,19 @@ def emit_config_artifacts(out_root, config):
 
 
 def generate(out_root, include_docs=True):
-    config = read_config()
+    config, regs = read_config_and_regs()
     out_root.mkdir(parents=True, exist_ok=True)
     ps_header = out_root / "ps" / "app" / "pl_control.h"
     rtl_dir = out_root / "hw" / "rtl" / "generated"
     ps_header.parent.mkdir(parents=True, exist_ok=True)
     rtl_dir.mkdir(parents=True, exist_ok=True)
 
-    run(["peakrdl", "c-header", "-o", str(ps_header), str(RDL)])
+    run(["peakrdl", "c-header", "-t", PL_CONTROL_TOP, "-o", str(ps_header), str(RDL)])
     run([
         "peakrdl",
         "regblock",
+        "-t",
+        PL_CONTROL_TOP,
         "--cpuif",
         "axi4-lite-flat",
         "--addr-width",
@@ -138,7 +255,7 @@ def generate(out_root, include_docs=True):
         text = sv.read_text()
         if not text.startswith("`timescale"):
             sv.write_text("`timescale 1ns / 1ps\n" + text, newline="")
-    emit_config_artifacts(out_root, config)
+    emit_config_artifacts(out_root, config, regs)
     if not include_docs:
         return
 
@@ -147,6 +264,8 @@ def generate(out_root, include_docs=True):
     run([
         "peakrdl",
         "html",
+        "-t",
+        PL_CONTROL_TOP,
         "-o",
         str(docs_dir),
         "--title",
