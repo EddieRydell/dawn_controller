@@ -71,7 +71,6 @@ Stream UART telemetry in another terminal:
 
 ```sh
 make logs
-
 ```
 
 The app prints `dawn controller starting`, the generated network and strand configuration, then one `e131_status ...` line per second.
@@ -113,16 +112,17 @@ output 1 pixel 1 RGB
 
 The frame word format inside PL frame RAM is `0x00RRGGBB`. E1.31 packets use 510 RGB data slots per universe, so a 30-output by 50-pixel frame uses 1500 pixels, 4500 RGB slots, and 9 universes.
 
-## Performance Claims
+## Performance
 
-Use the hardware profile flow when citing capability:
+Use the hardware profile flow to profile capability:
 
 ```sh
 make e131-profile-report
+# or:
 make e131-profile-report E131_PROFILE_DURATION=20 SERIAL_PORT=COMx
 ```
 
-This writes `E131_PROFILE_RESULTS.md` and links to raw artifacts under `build/bench/`. The report includes pass/fail criteria, observed packet rates, and WS281x protocol-limit calculations. The important claim to make from those results is whether a cell is stable at or below the protocol limit for 30 parallel outputs.
+This writes `E131_PROFILE_RESULTS.md` and links to raw artifacts under `build/bench/`. The report includes pass/fail criteria, observed packet rates, and WS281x protocol-limit calculations.
 
 ## Common Commands
 
