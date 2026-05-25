@@ -1,8 +1,6 @@
 # Dawn Controller
 
-Dawn Controller is a PYNQ-Z2 E1.31/sACN to WS281x light-show controller. It receives E1.31 over the board Ethernet port, assembles complete RGB frames on the Zynq processing system, commits them into PL frame RAM, and drives 30 parallel WS281x outputs from deterministic FPGA logic.
-
-The project is intended for source builds by FPGA-capable users who want a inspectable controller rather than a black-box appliance.
+Dawn Controller is a PYNQ-Z2 E1.31/sACN to WS281x light-show controller. It receives E1.31 over the board Ethernet port, assembles complete RGB frames on the Zynq PS, commits them into PL frame RAM, and drives 30 parallel WS281x outputs.
 
 ## Capabilities
 
@@ -72,12 +70,12 @@ make run
 Stream UART telemetry in another terminal:
 
 ```sh
-make serial-ports
 make logs
-make logs PORT=COMx
+
 ```
 
 The app prints `dawn controller starting`, the generated network and strand configuration, then one `e131_status ...` line per second.
+`make logs` should automatically discover ports. Use `make serial-ports` and `make logs PORT=COMx` if automatic port discovery fails.
 
 ## Network Setup
 
