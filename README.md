@@ -33,13 +33,14 @@ These values are generated from `hw/regs/pl_control.rdl`. Do not edit generated 
 ## Documentation
 
 - [User guide](docs/user-guide.md): prerequisites, build, run, SD deployment, network setup, and first light.
+- [Board-file setup](docs/board-files.md): installing the official PYNQ-Z2 Vivado board files.
 - [Wiring guide](docs/wiring.md): the 30 WS281x output pins and connector names.
 - [Performance guide](docs/performance.md): benchmark matrix, report generation, and WS281x protocol-limit analysis.
 - [Developer notes](docs/developer-notes.md): architecture, generated register contract, tests, and source layout.
 
 ## Build From Source
 
-Run from a shell where Vivado, Vitis, Bootgen, XSDB, and `hw_server` are on `PATH`. Install the PYNQ-Z2 board files before building; the Vivado script requires board part `tul.com.tw:pynq-z2:part0:1.0`.
+Run from a shell where Vivado, Vitis, Bootgen, XSDB, and `hw_server` are on `PATH`. Install the official PYNQ-Z2 board files before building; the Vivado script requires board part `tul.com.tw:pynq-z2:part0:1.0`. See [Board-file setup](docs/board-files.md).
 
 Use a virtual environment if you do not want the Python dependencies installed globally.
 

@@ -27,7 +27,6 @@ CONTRACT_SOURCE_PATHS = {
 ALLOWED_PREFIXES = (
     "hw/rtl/generated/",
     "build/",
-    "third_party/",
 )
 
 # These values are intentionally exploratory matrices rather than production
@@ -73,7 +72,7 @@ def tracked_files() -> list[Path]:
         stderr=subprocess.PIPE,
         check=True,
     )
-    return [REPO_ROOT / line for line in result.stdout.splitlines() if line]
+    return [path for line in result.stdout.splitlines() if line and (path := REPO_ROOT / line).exists()]
 
 
 def rel_path(path: Path) -> str:

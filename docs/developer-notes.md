@@ -33,6 +33,8 @@ Important paths:
 | `ps/scripts/` | Vitis app creation, JTAG run, PL snapshot, and boot packaging. |
 | `Makefile` | Primary workflow entrypoint. |
 
+The repo intentionally does not track vendor PYNQ-Z2 board files. Vivado must discover `tul.com.tw:pynq-z2:part0:1.0` from the user's installed board repository. See [PYNQ-Z2 board files](board-files.md).
+
 ## Generated Contract
 
 `hw/regs/pl_control.rdl` owns hardware/software constants such as:

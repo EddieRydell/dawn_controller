@@ -4,6 +4,7 @@ build/
 xsim.dir/
 NA/
 .idea/
+third_party/
 
 **__pycache**
 
@@ -18,4 +19,3 @@ vivado_*.backup.*
 
 # Misc generated runtime/build files
 dfx_runtime.txt
-

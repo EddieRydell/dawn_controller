@@ -35,6 +35,8 @@ Install the PYNQ-Z2 board files before `make hw`. The build script requires boar
 tul.com.tw:pynq-z2:part0:1.0
 ```
 
+See [PYNQ-Z2 board files](board-files.md) for the expected installation model. Dawn does not vendor these files in the repo.
+
 Install Python dependencies:
 
 ```sh
