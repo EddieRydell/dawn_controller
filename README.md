@@ -118,7 +118,6 @@ Use the hardware profile flow to profile capability:
 
 ```sh
 make e131-profile-report
-# or:
 make e131-profile-report E131_PROFILE_DURATION=20 SERIAL_PORT=COMx
 ```
 
